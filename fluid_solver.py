@@ -163,9 +163,9 @@ class pde_fluid_solver():
                     #    for j in range(1,J-1):
                     #        p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
 
-                for i in range(0,I):## Jacobi solver with boundary condition p_0. No boundary condition. We have to take into acount ALL bad i j
+                for i in range(I):## Jacobi solver with boundary condition p_0. No boundary condition. We have to take into acount ALL bad i j
                     if i == 0:
-                        for j in range(0,J):
+                        for j in range(J):
                             if j == 0:
                                 p_new[i,j] =+0.25*(p[i+1,j]+p_new[i,j]+p[i,j+1]+p_new[i,j])-0.25*self.dx**2*right_side[i,j]
                             elif j == J-1:
