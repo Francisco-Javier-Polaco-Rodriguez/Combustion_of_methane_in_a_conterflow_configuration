@@ -158,14 +158,45 @@ class pde_fluid_solver():
         old_rel_error = np.nan
         while not_good and count < max_reps:
             for k in range(1,repeats):
-                for i in range(1,I-1):## Jacobi solver with boundary condition p_0. No change p in boundary.
-                    for j in range(1,J-1):
-                        p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+                    #simpler version commented, but boundary condition in p=p0
+                    #for i in range(1,I-1):
+                    #    for j in range(1,J-1):
+                    #        p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+
+                for i in range(0,I):## Jacobi solver with boundary condition p_0. No boundary condition. We have to take into acount ALL bad i j
+                    if i == 0:
+                        for j in range(0,J):
+                            if j == 0:
+                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i,j]+p[i,j+1]+p_new[i,j])-0.25*self.dx**2*right_side[i,j]
+                            elif j == J-1:
+                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i,j]+p[i,j]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+                            else:
+                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+                    elif i == I-1:
+                        for j in range(J):
+                            if j == 0:
+                                p_new[i,j] =+0.25*(p[i,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j])-0.25*self.dx**2*right_side[i,j]
+                            elif j == J-1:
+                                p_new[i,j] =+0.25*(p[i,j]+p_new[i-1,j]+p[i,j]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+                            else:
+                                p_new[i,j] =+0.25*(p[i,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+                    else:
+                        for j in range(J):
+                            if j == 0:
+                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j])-0.25*self.dx**2*right_side[i,j]
+                            elif j == J-1:
+                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+                            else:
+                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
                 del p
                 p = p_new.copy()
                 count += 1
-            
-            rel_error = np.mean(np.mean(np.abs(DDx(p_new,self.dx,0,0)+DDy(p_new,self.dy,0,0)-right_side),axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side),axis = 0),axis = 0)
+            #
+            # If first way of calculating, uncomment this error control
+            # rel_error = np.mean(np.mean(np.abs(DDx(p_new,self.dx,0,0)+DDy(p_new,self.dy,0,0)-right_side),axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side),axis = 0),axis = 0)
+            #
+
+            rel_error = np.mean(np.mean(np.abs(DDx_nobc(p_new,self.dx)+DDy_nobc(p_new,self.dy)-right_side),axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side),axis = 0),axis = 0)
             if rel_error > precision and np.abs(rel_error-old_rel_error) < precision*0.1: ## Max accuracy of solver
                 not_good = False
                 print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  a %ix%i grid.'%(rel_error,precision,self.dim[0],self.dim[1]) + Style.RESET_ALL)
