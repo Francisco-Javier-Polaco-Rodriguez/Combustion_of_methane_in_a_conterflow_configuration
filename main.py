@@ -5,13 +5,13 @@ import os
 from fluid_solver import *
 import cmasher as cmr
 
-u_slot = 1e-2
-u_coflow = 0.5e-2
-N_space = 32
-N_time = 14
+u_slot = 1
+u_coflow = 0.5
+N_space = 24
+N_time = 15
 Lx,Ly = 2e-3,2e-3
-dt = 1e-5#100*(np.mean([u_slot,u_coflow])/Lx*N_space**2)**-1
-
+dt = 5e-7#100*(np.mean([u_slot,u_coflow])/Lx*N_space**2)**-1
+print(dt)
 [X,Y] = np.meshgrid(np.linspace(0,Lx,N_space),np.linspace(0,Lx,N_space))
 up_bc_uy = np.ones(N_space)
 down_bc_uy = np.ones(N_space)
@@ -64,6 +64,6 @@ path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Method
 
 for k in np.arange(1,N_time,1):
     fig = plt.figure()
-    plt.contour(X,Y,solver.p[:,:,k],cmap=cmr.redshift,levels=5)
+    plt.contour(X,Y,solver.p[:,:,k],cmap=cmr.redshift,levels=100)
     plt.quiver(X,Y,solver.ux[:,:,k],solver.uy[:,:,k])
     fig.savefig(path + '/' + 'frame%i.png'%(k))

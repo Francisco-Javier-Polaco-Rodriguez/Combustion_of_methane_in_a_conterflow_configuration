@@ -8,7 +8,7 @@ def DDx(M,dx,Bound_left = 0,Bound_right = 0):
     for j in range(1,J-1):
         if j == J-1:
             #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2
-            ddxM[:,j] = 0 ## Intuition. No curvature on the derivative because free wall
+            ddxM[:,j] = ddxM[:,j-1]  ## Intuition. No curvature on the derivative because free wall
         elif j == 0:
             ddxM[:,j] = (M[:,j+1]-2*M[:,j]+Bound_left)/dx**2
         else:
@@ -32,7 +32,6 @@ def Dx(M,dx,Bound_left = 0,Bound_right = 0):
     dxM = np.zeros([I,J])
     for j in range(1,J-1):
         if j == J-1:
-            #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2
             dxM[:,j] = dxM[:,j-1] ## Intuition. No curvature on the derivative because free wall
         elif j == 0:
             dxM[:,j] = (M[:,j+1]-Bound_left)/dx
@@ -59,9 +58,9 @@ def DDx_nobc(M,dx):
     ddxM = np.zeros([I,J])
     for j in range(1,J-1):
         if j == J-1:
-            ddxM[:,j] = 0 ## Intuition. No curvature on the derivative because free wall
+            ddxM[:,j] = ddxM[:,j-1] ## Intuition. No curvature on the derivative because free wall
         elif j == 0:
-            ddxM[:,j] = 0
+            ddxM[:,j] = ddxM[:,j+1]
         else:
             ddxM[:,j] = (M[:,j+1]-2*M[:,j]+M[:,j-1])/dx**2
     return ddxM
@@ -71,9 +70,9 @@ def DDy_nobc(M,dy):
     ddyM = np.zeros([I,J])
     for i in range(1,I-1):
         if i == I-1:
-            ddyM[i,:] = 0
+            ddyM[i,:] = ddyM[i-1,:]
         elif i == 0:
-            ddyM[i,:] = 0
+            ddyM[i,:] = ddyM[i+1,:]
         else:
             ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
     return ddyM
@@ -157,7 +156,7 @@ class pde_fluid_solver():
         count = 0
         old_rel_error = np.nan
         while not_good and count < max_reps:
-            for k in range(1,repeats):
+            for k in range(repeats):
                     #simpler version commented, but boundary condition in p=p0
                     #for i in range(1,I-1):
                     #    for j in range(1,J-1):
@@ -242,16 +241,25 @@ class pde_fluid_solver():
         duxuy = np.zeros(self.dim)
         ## Second step simulation !!!
         for k in tqdm(range(1,N)):
+            
+            ## Step 1 advection
             uxy = ux[:,:,k-1]*uy[:,:,k-1]
             duxuy = Dx(uxy,dx)+Dy(uxy,dy,Bound_up=bc_x_up*bc_y_up,Bound_down=bc_x_down*bc_y_down)
             ux_s  = ux[:,:,k-1]-dt*duxuy
             uy_s = uy[:,:,k-1]-dt*duxuy
-            ux_ss = ux_s+dt*visc*(DDx_nobc(ux_s,dx)+DDy_nobc(ux_s,dy))
+
+            ## Step 2 diffusion
+            ux_ss = ux_s+dt*visc*((1+ux[:,:,k-1]**2*dt/visc)*DDx_nobc(ux_s,dx)+(1+uy[:,:,k-1]**2*dt/visc)*DDy_nobc(ux_s,dy))
             uy_ss = uy_s+dt*visc*(DDx_nobc(ux_s,dx)+DDy_nobc(uy_s,dy))
+
+            ##Step 3 compute p
             p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*dt**-1*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy)),max_reps=repeat_jac,precision=precision_jac)
+
+            ## Step 4 calculate new velocity
             ux[:,:,k] = ux_ss-dt*dens**-1*Dx_nobc(p[:,:,k],dx)
             uy[:,:,k] = uy_ss-dt*dens**-1*Dy_nobc(p[:,:,k],dy)
-            # Boundary conditions
+
+            # Step 5 Boundary conditions
             ux[0,:,k]  = bc_x_up
             ux[-1,:,k] = bc_x_down
             uy[0,:,k]  = bc_y_up
@@ -261,6 +269,67 @@ class pde_fluid_solver():
             # ux[:,-1,k] = nothing needed, free wall
             # uy[:,0,k]  = nothing needed, slipping wall
             # uy[:,-1,k] = nothing needed, free wall
+        self.ux = np.concatenate((self.ux,ux),axis = 2)
+        self.uy = np.concatenate((self.uy,uy),axis = 2)
+        self.p = np.concatenate((self.p,p),axis = 2)
+
+    def solve_navier_stokes_mine(self,N = np.NaN,precision_jac = 0.1,repeat_jac = 100): # Advance N times Navier Stokes equations.
+        if N == np.NaN:
+            N = self.N_time
+        ## First step. Initialize simulation
+        ux = np.zeros([self.dim[0],self.dim[1],N])
+        uy = np.zeros([self.dim[0],self.dim[1],N])
+        p = np.zeros([self.dim[0],self.dim[1],N])
+        dt = self.dt
+        dx,dy = self.dx,self.dy
+        visc = self.initial_condition.viscosity
+        dens = self.initial_condition.density
+        ux[:,:,0] = self.ux[:,:,-1]
+        uy[:,:,0] = self.uy[:,:,-1]
+        p[:,:,0]  = self.p[:,:,-1]
+        # Preinitialise in RAM memory u star, u star stat
+        ux_s = np.zeros(self.dim)
+        ux_ss = np.zeros(self.dim)
+        uy_s = np.zeros(self.dim)
+        uy_ss = np.zeros(self.dim)
+        ## Load boundary contition of the problem up and down (velocities in the slot and coflow)
+        bc_x_up = self.bc_ux.up
+        bc_y_up = self.bc_uy.up
+        bc_x_down = self.bc_ux.down
+        bc_y_down = self.bc_uy.down
+        ## Empty matrix that is gonna be used
+        duxuy = np.zeros(self.dim)
+        ## Second step simulation !!!
+        for k in tqdm(range(1,N)):
+            
+            ## Step 1 advection
+            
+            ux_s  = ux[:,:,k-1]-dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down,Bound_up=bc_x_up))
+            uy_s = uy[:,:,k-1]-dt*(uy[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(uy[:,:,k-1],dy,Bound_down=bc_y_down,Bound_up=bc_y_up))
+
+            ## Step 2 diffusion
+            ux_ss = ux_s+dt*visc*(DDx(ux[:,:,k-1],dx)+DDy(ux[:,:,k-1],dy,Bound_down=bc_x_down,Bound_up=bc_x_up))
+            uy_ss = uy_s+dt*visc*(DDx(uy[:,:,k-1],dx)+DDy(uy[:,:,k-1],dy,Bound_down=bc_y_down,Bound_up=bc_y_up))
+
+            ##Step 3 compute p
+            p[:,:,k]  = -self.presure_solver(p[:,:,k-1],-dens/dt*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy)),max_reps=repeat_jac,precision=precision_jac)
+
+            ## Step 4 calculate new velocity
+            ux[:,:,k] = ux_ss-dt*dens**-1*Dx_nobc(p[:,:,k],dx)
+            uy[:,:,k] = uy_ss-dt*dens**-1*Dy_nobc(p[:,:,k],dy)
+            
+            # Step 5 Boundary conditions
+
+            ux[0,:,k]  = bc_x_down
+            ux[-1,:,k] = bc_x_up
+            uy[0,:,k]  = bc_y_down
+            uy[-1,:,k] = bc_y_up
+
+            ux[:,0,k]  = np.zeros(self.dim[1])
+            # ux[:,-1,k] = nothing needed, free wall
+            # uy[:,0,k]  = nothing needed, slipping wall
+            # uy[:,-1,k] = nothing needed, free wall
+
         self.ux = np.concatenate((self.ux,ux),axis = 2)
         self.uy = np.concatenate((self.uy,uy),axis = 2)
         self.p = np.concatenate((self.p,p),axis = 2)
