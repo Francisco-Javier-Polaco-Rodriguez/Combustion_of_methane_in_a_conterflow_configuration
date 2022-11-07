@@ -3,14 +3,13 @@ import matplotlib.pyplot as plt
 import os
 
 from fluid_solver import *
-import cmasher as cmr
 
 u_slot = 1
 u_coflow = 0.5
-N_space = 24
+N_space = 248
 N_time = 15
 Lx,Ly = 2e-3,2e-3
-dt = 5e-7#100*(np.mean([u_slot,u_coflow])/Lx*N_space**2)**-1
+dt = 25*(np.mean([u_slot,u_coflow])/Lx*N_space**2)**-1
 print(dt)
 [X,Y] = np.meshgrid(np.linspace(0,Lx,N_space),np.linspace(0,Lx,N_space))
 up_bc_uy = np.ones(N_space)
@@ -53,10 +52,10 @@ main_fluid = fluid_initial_condition(u_0x = u0x,
 bc_ux = boundary_condition(up_bc_ux,down_bc_ux)
 bc_uy = boundary_condition(up_bc_uy,down_bc_uy)
 
-solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly,ignore_st = True)
+solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 
 #solver.presure_solver(np.ones([N_space,N_space]),precision = 0.05,max_reps = 1000)
-solver.solve_navier_stokes(N_time,precision_jac = 0.1,repeat_jac = 50000)
+solver.solve_navier_stokes(N_time,precision_jac = 0.05,repeat_jac = 150)
 
 
 # Change this to the path on your oun laptop
@@ -64,6 +63,7 @@ path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Method
 
 for k in np.arange(1,N_time,1):
     fig = plt.figure()
-    plt.contour(X,Y,solver.p[:,:,k],cmap=cmr.redshift,levels=100)
+    plt.contour(X,Y,solver.p[:,:,k])
+    plt.colorbar
     plt.quiver(X,Y,solver.ux[:,:,k],solver.uy[:,:,k])
     fig.savefig(path + '/' + 'frame%i.png'%(k))

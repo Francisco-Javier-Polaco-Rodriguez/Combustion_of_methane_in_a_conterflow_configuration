@@ -123,7 +123,7 @@ class boundary_condition():
         self.dim = len(up)
 
 class pde_fluid_solver():
-    def __init__(self,fluid_ic,bc_ux,bc_uy,N_time,dt,Lx,Ly,ignore_st = False):
+    def __init__(self,fluid_ic,bc_ux,bc_uy,N_time,dt,Lx,Ly):
         self.initial_condition = fluid_ic
         self.bc_ux = bc_ux
         self.bc_uy = bc_uy
@@ -142,11 +142,11 @@ class pde_fluid_solver():
         Fy = fluid_ic.viscosity*dt/self.dy**2
         Cx = np.mean(np.mean(np.abs(fluid_ic.ux)+np.abs(fluid_ic.uy)))*dt/self.dx
         Cy = Cx*self.dx/self.dy
-        if (Fx > 0.25 or Fy > 0.25) and not ignore_st:
+        if Fx > 0.25 or Fy > 0.25:
             raise ValueError('Invalid fourier number. You need bigger grid or more little time step.  The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
-        if Cy > 1 or Cx > 1 and not ignore_st:
+        if Cy > 1 or Cx > 1:
             TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
-        print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
+        print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
     def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = np.inf):
         p = left_side.copy()
         p_new = p.copy()
