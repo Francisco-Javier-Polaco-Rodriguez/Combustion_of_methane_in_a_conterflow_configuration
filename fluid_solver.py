@@ -8,7 +8,7 @@ def DDx(M,dx,Bound_left = 0,Bound_right = 0):
     for j in range(1,J-1):
         if j == J-1:
             #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2
-            ddxM[:,j] = 0 ## Intuition. No curvature on the derivative because free wall
+            ddxM[:,j] = ddxM[:,j-1] ## Same derivative that at lefht, free wall
         elif j == 0:
             ddxM[:,j] = (M[:,j+1]-2*M[:,j]+Bound_left)/dx**2
         else:
@@ -131,6 +131,7 @@ class pde_fluid_solver():
         self.Nt = N_time
         self.dim = fluid_ic.dimensions
         self.dt = dt
+        self.X,self.Y = np.meshgrid(np.linspace(0,Lx,self.dim[1]),np.linspace(0,Ly,self.dim[0]))
         self.dx = Lx/self.dim[0]
         self.dy = Ly/self.dim[0]
         self.ux= fluid_ic.ux[:,:,np.newaxis]
@@ -148,7 +149,7 @@ class pde_fluid_solver():
         if Cy > 1 or Cx > 1:
             TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
         print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
-    def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = np.inf):
+    def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = 10000):
         p = left_side.copy()
         p_new = p.copy()
         not_good = True
@@ -157,7 +158,7 @@ class pde_fluid_solver():
         count = 0
         old_rel_error = np.nan
         while not_good and count < max_reps:
-            for k in range(1,repeats):
+            for k in range(repeats):
                     #simpler version commented, but boundary condition in p=p0
                     #for i in range(1,I-1):
                     #    for j in range(1,J-1):
@@ -242,16 +243,27 @@ class pde_fluid_solver():
         duxuy = np.zeros(self.dim)
         ## Second step simulation !!!
         for k in tqdm(range(1,N)):
+
+            ## We only calculate 1 time ux*uy
             uxy = ux[:,:,k-1]*uy[:,:,k-1]
+
+            ## We only derivate one time the tensor ux uy
             duxuy = Dx(uxy,dx)+Dy(uxy,dy,Bound_up=bc_x_up*bc_y_up,Bound_down=bc_x_down*bc_y_down)
+
+            ## Step 1 calculate u_star
             ux_s  = ux[:,:,k-1]-dt*duxuy
             uy_s = uy[:,:,k-1]-dt*duxuy
+
+            ## Step 2 calculate u_star_star
             ux_ss = ux_s+dt*visc*(DDx_nobc(ux_s,dx)+DDy_nobc(ux_s,dy))
             uy_ss = uy_s+dt*visc*(DDx_nobc(ux_s,dx)+DDy_nobc(uy_s,dy))
-            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*dt**-1*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy)),max_reps=repeat_jac,precision=precision_jac)
+
+            ## Step 3 impose incompresibility 
+            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy)/dt),max_reps=repeat_jac,precision=precision_jac)
             ux[:,:,k] = ux_ss-dt*dens**-1*Dx_nobc(p[:,:,k],dx)
             uy[:,:,k] = uy_ss-dt*dens**-1*Dy_nobc(p[:,:,k],dy)
-            # Boundary conditions
+
+            # Extra step. No boundary condition in derivatives. We impose here the boundary conditions
             ux[0,:,k]  = bc_x_up
             ux[-1,:,k] = bc_x_down
             uy[0,:,k]  = bc_y_up
