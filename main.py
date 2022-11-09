@@ -4,12 +4,12 @@ import os
 
 from fluid_solver import *
 
-u_slot = 1
-u_coflow = 0.5
+u_slot = 10
+u_coflow = 5
 N_x,N_y = 32,32
-N_time = 25
+N_time = 50
 Lx,Ly = 2e-3,2e-3
-dt = 1e-6
+dt = 1e-8
 
 [X,Y] = np.meshgrid(np.linspace(0,Lx,N_x),np.linspace(0,Lx,N_y))
 up_bc_uy = np.ones(N_x)
@@ -41,7 +41,7 @@ u0x[-1,:]=down_bc_ux
 p0 = np.zeros([N_y,N_x])
 
 
-viscosity,density = 15e-6,1.1614
+viscosity,density = 15e-4,1.1614
 main_fluid = fluid_initial_condition(u_0x = u0x,
                 u_0y = u0y,
                 p_0 = p0,
@@ -55,7 +55,7 @@ bc_uy = boundary_condition(up_bc_uy,down_bc_uy)
 solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 
 #solver.presure_solver(np.ones([N_space,N_space]),precision = 0.05,max_reps = 1000)
-solver.solve_navier_stokes(N_time,precision_jac = 0.0005,repeat_jac = 2000)
+solver.solve_navier_stokes(N_time,precision_jac = 0.005,repeat_jac = 2000)
 
 
 # Change this to the path on your oun laptop

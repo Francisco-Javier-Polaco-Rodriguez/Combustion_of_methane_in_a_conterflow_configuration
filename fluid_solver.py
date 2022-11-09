@@ -24,9 +24,9 @@ def Dx(M,dx,Bound_left = 0):
             #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2 ## What would be without the bc
             dxM[:,j] = 0 ## Free wall, derivative 0
         elif j == 0:
-            dxM[:,j] = (M[:,j+1]-Bound_left)/dx
+            dxM[:,j] = (M[:,j+1]-Bound_left)/dx/2
         else:
-            dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx
+            dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
 def Dy(M,dy,Bound_up,Bound_down):
@@ -34,11 +34,11 @@ def Dy(M,dy,Bound_up,Bound_down):
     dyM = np.zeros([I,J])
     for i in range(I):
         if i == I-1:
-            dyM[i,:] = (Bound_down-M[i-1,:])/dy
+            dyM[i,:] = (Bound_down-M[i-1,:])/dy/2
         elif i == 0:
-            dyM[i,:] = (M[i+1,:]-Bound_up)/dy
+            dyM[i,:] = (M[i+1,:]-Bound_up)/dy/2
         else:
-            dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy
+            dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy/2
     return dyM
 
 def Dx_nobc(M,dx):
@@ -50,7 +50,7 @@ def Dx_nobc(M,dx):
         elif j == 0:
             dxM[:,j] = 0
         else:
-            dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx
+            dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
 def Dy_nobc(M,dy,Bound_right = 0):
@@ -58,11 +58,11 @@ def Dy_nobc(M,dy,Bound_right = 0):
     dyM = np.zeros([I,J])
     for i in range(I):
         if i == I-1:
-            dyM[i,:] = (Bound_right-M[i-1,:])/dy
+            dyM[i,:] = (Bound_right-M[i-1,:])/dy/2
         elif i == 0:
             dyM[i,:] = 0
         else:
-            dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy
+            dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy/2
     return dyM
 
 
@@ -178,16 +178,22 @@ class pde_fluid_solver():
         bc_y_down = self.bc_uy.down
         ## Second step simulation !!!
         for k in tqdm(range(1,N)):
-            ## Step 1 calculate u_star
-            ux_s  = ux[:,:,k-1]#-dt*(Dx(ux[:,:,k-1]**2,dx)+Dy(ux[:,:,k-1]*uy[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
-            uy_s = uy[:,:,k-1]#-dt*(Dx(ux[:,:,k-1]*uy[:,:,k-1],dx)+Dy(uy[:,:,k-1]**2,dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
+            ## Step 1 ADVECTION
+            ux_s  = ux[:,:,k-1] -dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
+            uy_s = uy[:,:,k-1] - dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(uy[:,:,k-1],dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
 
-            ## Step 2 calculate u_star_star
-            ux_ss = ux_s+dt*visc*(DDx(ux_s,dx)+DDy(ux_s,dy))
-            uy_ss = uy_s+dt*visc*(DDx(ux_s,dx)+DDy(uy_s,dy))
+            ## ARTIFICIAL DIFFUSION, order 2 in advection
+            ux_s = ux_s + 0.5*dt**2*(ux[:,:,k-1]**2*DDx(ux[:,:,k-1],dx)+uy[:,:,k-1]**2*DDy(ux[:,:,k-1],dy))
+            ux_s = ux_s + 0.5*dt**2*(ux[:,:,k-1]**2*DDx(uy[:,:,k-1],dx)+uy[:,:,k-1]**2*DDy(uy[:,:,k-1],dy))
 
-            ## Step 3 impose incompresibility 
+            ## Step 2 DIFFUSION
+            ux_ss = ux_s + dt*visc*(DDx(ux_s,dx)+DDy(ux_s,dy))
+            uy_ss = uy_s + dt*visc*(DDx(ux_s,dx)+DDy(uy_s,dy))
+
+            ## Step 3 IMPOSE COMPRESSIBILITY 
             p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up)/dt),max_reps=repeat_jac,precision=precision_jac)
+
+            ##Step 4, ADVANCE TIME
             ux[:,:,k] = ux_ss-dt*dens**-1*Dx_nobc(p[:,:,k],dx)
             uy[:,:,k] = uy_ss-dt*dens**-1*Dy_nobc(p[:,:,k],dy)
 
