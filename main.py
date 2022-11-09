@@ -6,10 +6,10 @@ from fluid_solver import *
 
 u_slot = 1
 u_coflow = 0.5
-N_x,N_y = 32,32
+N_x,N_y = 64,64
 N_time = 100
 Lx,Ly = 2e-3,2e-3
-dt = 100e-9
+dt = 10e-9
 viscosity,density = 15e-6,1.1614
 
 [X,Y] = np.meshgrid(np.linspace(0,Lx,N_x),np.linspace(0,Lx,N_y))
@@ -64,13 +64,14 @@ path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Method
 X,Y = 1e3*X,1e3*Y
 
 for k in np.arange(1,N_time,1):
-    fig = plt.figure()
+    fig, ax = plt.subplots(1,1)
     mod_u = np.sqrt(solver.ux[:,:,k]**2+solver.uy[:,:,k]**2)
-    color = plt.pcolor(X,Y,mod_u,cmap = 'jet')
+    color = ax.pcolormesh(X,Y,mod_u,cmap = 'jet',shading = 'auto')
     plt.title('T = %1.2f ns'%(k*dt*1e6))
     plt.quiver(X,Y,solver.ux[:,:,k]/mod_u,solver.uy[:,:,k]/mod_u)
     plt.colorbar(color)
     plt.xlabel('x   (mm)',size = 13)
     plt.ylabel('y   (mm)',size = 13)
+    plt.axis([0,Lx*1e3,0,Ly*1e3+1e3*Ly/N_y])
     fig.savefig(path + '/' + 'frame%i.png'%(k))
     del fig

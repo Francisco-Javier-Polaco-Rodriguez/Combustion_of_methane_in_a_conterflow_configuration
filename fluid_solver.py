@@ -191,11 +191,11 @@ class pde_fluid_solver():
             uy_ss = uy_s + dt*visc*(DDx(ux_s,dx)+DDy(uy_s,dy))
 
             ## Step 3 IMPOSE COMPRESSIBILITY 
-            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up)/dt),max_reps=repeat_jac,precision=precision_jac)
+            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up))/dt,max_reps=repeat_jac,precision=precision_jac)
 
             ##Step 4, ADVANCE TIME
-            ux[:,:,k] = ux_ss-dt*dens**-1*Dx_nobc(p[:,:,k],dx)
-            uy[:,:,k] = uy_ss-dt*dens**-1*Dy_nobc(p[:,:,k],dy)
+            ux[:,:,k] = ux_ss-dt*Dx_nobc(p[:,:,k],dx)/dens
+            uy[:,:,k] = uy_ss-dt*Dy_nobc(p[:,:,k],dy)/dens
 
             # Extra step. No boundary condition in derivatives. We impose here the boundary conditions
             ux[0,:,k]  = bc_x_up
