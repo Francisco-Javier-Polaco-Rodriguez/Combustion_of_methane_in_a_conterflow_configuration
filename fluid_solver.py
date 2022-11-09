@@ -2,38 +2,27 @@ import numpy as np
 from colorama import Fore, Back, Style
 from tqdm import tqdm
 
-def DDx(M,dx,Bound_left = 0,Bound_right = 0):
+def DDx(M,dx):
     I,J = M.shape
     ddxM = np.zeros([I,J])
     for j in range(1,J-1):
-        if j == J-1:
-            #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2
-            ddxM[:,j] = ddxM[:,j-1] ## Same derivative that at lefht, free wall
-        elif j == 0:
-            ddxM[:,j] = (M[:,j+1]-2*M[:,j]+Bound_left)/dx**2
-        else:
-            ddxM[:,j] = (M[:,j+1]-2*M[:,j]+M[:,j-1])/dx**2
+        ddxM[:,j] = (M[:,j+1]-2*M[:,j]+M[:,j-1])/dx**2
     return ddxM
 
-def DDy(M,dy,Bound_up,Bound_down):
+def DDy(M,dy):
     I,J = M.shape
     ddyM = np.zeros([I,J])
     for i in range(1,I-1):
-        if i == I-1:
-            ddyM[i,:] = (Bound_down-2*M[i,:]+M[i-1,:])/dy**2
-        elif i == 0:
-            ddyM[i,:] = (M[i+1,:]-2*M[i,:]+Bound_up)/dy**2
-        else:
-            ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
+        ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
     return ddyM
 
-def Dx(M,dx,Bound_left = 0,Bound_right = 0):
+def Dx(M,dx,Bound_left = 0):
     I,J = M.shape
     dxM = np.zeros([I,J])
-    for j in range(1,J-1):
+    for j in range(J):
         if j == J-1:
-            #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2
-            dxM[:,j] = dxM[:,j-1] ## Intuition. No curvature on the derivative because free wall
+            #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2 ## What would be without the bc
+            dxM[:,j] = 0 ## Free wall, derivative 0
         elif j == 0:
             dxM[:,j] = (M[:,j+1]-Bound_left)/dx
         else:
@@ -43,7 +32,7 @@ def Dx(M,dx,Bound_left = 0,Bound_right = 0):
 def Dy(M,dy,Bound_up,Bound_down):
     I,J = M.shape
     dyM = np.zeros([I,J])
-    for i in range(1,I-1):
+    for i in range(I):
         if i == I-1:
             dyM[i,:] = (Bound_down-M[i-1,:])/dy
         elif i == 0:
@@ -52,52 +41,26 @@ def Dy(M,dy,Bound_up,Bound_down):
             dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy
     return dyM
 
-## Functions with no bc
-
-def DDx_nobc(M,dx):
-    I,J = M.shape
-    ddxM = np.zeros([I,J])
-    for j in range(1,J-1):
-        if j == J-1:
-            ddxM[:,j] = 0 ## Intuition. No curvature on the derivative because free wall
-        elif j == 0:
-            ddxM[:,j] = 0
-        else:
-            ddxM[:,j] = (M[:,j+1]-2*M[:,j]+M[:,j-1])/dx**2
-    return ddxM
-
-def DDy_nobc(M,dy):
-    I,J = M.shape
-    ddyM = np.zeros([I,J])
-    for i in range(1,I-1):
-        if i == I-1:
-            ddyM[i,:] = 0
-        elif i == 0:
-            ddyM[i,:] = 0
-        else:
-            ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
-    return ddyM
-
 def Dx_nobc(M,dx):
     I,J = M.shape
     dxM = np.zeros([I,J])
-    for j in range(1,J-1):
+    for j in range(J):
         if j == J-1:
-            dxM[:,j] = dxM[:,j-1] ## Intuition. No curvature on the derivative because free wall
+            dxM[:,j] = 0
         elif j == 0:
-            dxM[:,j] = dxM[:,j+1]
+            dxM[:,j] = 0
         else:
             dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx
     return dxM
 
-def Dy_nobc(M,dy,):
+def Dy_nobc(M,dy,Bound_right = 0):
     I,J = M.shape
     dyM = np.zeros([I,J])
-    for i in range(1,I-1):
+    for i in range(I):
         if i == I-1:
-            dyM[i,:] = dyM[i-1,:]
+            dyM[i,:] = (Bound_right-M[i-1,:])/dy
         elif i == 0:
-            dyM[i,:] = dyM[i+1,:]
+            dyM[i,:] = 0
         else:
             dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy
     return dyM
@@ -137,7 +100,7 @@ class pde_fluid_solver():
         self.ux= fluid_ic.ux[:,:,np.newaxis]
         self.uy = fluid_ic.uy[:,:,np.newaxis]
         self.p = fluid_ic.pressure[:,:,np.newaxis]
-        if self.dim[0]!=bc_ux.dim or self.dim[0]!=bc_uy.dim:
+        if self.dim[1]!=bc_ux.dim or self.dim[1]!=bc_uy.dim:
             raise ValueError('Boundary condition and fluid have not the same dimension')
         # Stability comprobation
         Fx = fluid_ic.viscosity*dt/self.dx**2
@@ -160,44 +123,18 @@ class pde_fluid_solver():
         while not_good and count < max_reps:
             for k in range(repeats):
                     #simpler version commented, but boundary condition in p=p0
-                    #for i in range(1,I-1):
-                    #    for j in range(1,J-1):
-                    #        p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-
-                for i in range(0,I):## Jacobi solver with boundary condition p_0. No boundary condition. We have to take into acount ALL bad i j
-                    if i == 0:
-                        for j in range(0,J):
-                            if j == 0:
-                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i,j]+p[i,j+1]+p_new[i,j])-0.25*self.dx**2*right_side[i,j]
-                            elif j == J-1:
-                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i,j]+p[i,j]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-                            else:
-                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-                    elif i == I-1:
-                        for j in range(J):
-                            if j == 0:
-                                p_new[i,j] =+0.25*(p[i,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j])-0.25*self.dx**2*right_side[i,j]
-                            elif j == J-1:
-                                p_new[i,j] =+0.25*(p[i,j]+p_new[i-1,j]+p[i,j]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-                            else:
-                                p_new[i,j] =+0.25*(p[i,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-                    else:
-                        for j in range(J):
-                            if j == 0:
-                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j])-0.25*self.dx**2*right_side[i,j]
-                            elif j == J-1:
-                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-                            else:
-                                p_new[i,j] =+0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+                for i in range(1,I-1):
+                    for j in range(1,J-1):
+                        p_new[i,j] =0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
                 del p
                 p = p_new.copy()
                 count += 1
-            #
-            # If first way of calculating, uncomment this error control
-            # rel_error = np.mean(np.mean(np.abs(DDx(p_new,self.dx,0,0)+DDy(p_new,self.dy,0,0)-right_side),axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side),axis = 0),axis = 0)
-            #
-
-            rel_error = np.mean(np.mean(np.abs(DDx_nobc(p_new,self.dx)+DDy_nobc(p_new,self.dy)-right_side),axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side),axis = 0),axis = 0)
+                p_new[:,0]=p_new[:,1]
+                p_new[-1,:]=p_new[-2,:]
+                p_new[0,:]=p_new[1,:]
+                p_new[:,-1]=0
+            er_mat = np.abs(DDx(p_new,self.dx)+DDy(p_new,self.dy)-right_side)
+            rel_error = np.mean(np.mean(er_mat[1:-1,1:-1],axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side[1:-1,1:-1]),axis = 0),axis = 0)
             if rel_error > precision and np.abs(rel_error-old_rel_error) < precision*0.1: ## Max accuracy of solver
                 not_good = False
                 print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  a %ix%i grid.'%(rel_error,precision,self.dim[0],self.dim[1]) + Style.RESET_ALL)
@@ -239,27 +176,18 @@ class pde_fluid_solver():
         bc_y_up = self.bc_uy.up
         bc_x_down = self.bc_ux.down
         bc_y_down = self.bc_uy.down
-        ## Empty matrix that is gonna be used
-        duxuy = np.zeros(self.dim)
         ## Second step simulation !!!
         for k in tqdm(range(1,N)):
-
-            ## We only calculate 1 time ux*uy
-            uxy = ux[:,:,k-1]*uy[:,:,k-1]
-
-            ## We only derivate one time the tensor ux uy
-            duxuy = Dx(uxy,dx)+Dy(uxy,dy,Bound_up=bc_x_up*bc_y_up,Bound_down=bc_x_down*bc_y_down)
-
             ## Step 1 calculate u_star
-            ux_s  = ux[:,:,k-1]-dt*duxuy
-            uy_s = uy[:,:,k-1]-dt*duxuy
+            ux_s  = ux[:,:,k-1]#-dt*(Dx(ux[:,:,k-1]**2,dx)+Dy(ux[:,:,k-1]*uy[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
+            uy_s = uy[:,:,k-1]#-dt*(Dx(ux[:,:,k-1]*uy[:,:,k-1],dx)+Dy(uy[:,:,k-1]**2,dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
 
             ## Step 2 calculate u_star_star
-            ux_ss = ux_s+dt*visc*(DDx_nobc(ux_s,dx)+DDy_nobc(ux_s,dy))
-            uy_ss = uy_s+dt*visc*(DDx_nobc(ux_s,dx)+DDy_nobc(uy_s,dy))
+            ux_ss = ux_s+dt*visc*(DDx(ux_s,dx)+DDy(ux_s,dy))
+            uy_ss = uy_s+dt*visc*(DDx(ux_s,dx)+DDy(uy_s,dy))
 
             ## Step 3 impose incompresibility 
-            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy)/dt),max_reps=repeat_jac,precision=precision_jac)
+            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up)/dt),max_reps=repeat_jac,precision=precision_jac)
             ux[:,:,k] = ux_ss-dt*dens**-1*Dx_nobc(p[:,:,k],dx)
             uy[:,:,k] = uy_ss-dt*dens**-1*Dy_nobc(p[:,:,k],dy)
 
@@ -269,7 +197,7 @@ class pde_fluid_solver():
             uy[0,:,k]  = bc_y_up
             uy[-1,:,k] = bc_y_down
 
-            ux[:,0,k]  = np.zeros(self.dim[1])
+            ux[:,0,k]  = np.zeros(self.dim[0])
             # ux[:,-1,k] = nothing needed, free wall
             # uy[:,0,k]  = nothing needed, slipping wall
             # uy[:,-1,k] = nothing needed, free wall
