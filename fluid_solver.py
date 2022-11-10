@@ -177,7 +177,7 @@ class pde_fluid_solver():
         bc_x_down = self.bc_ux.down
         bc_y_down = self.bc_uy.down
         ## Second step simulation !!!
-        for k in tqdm(range(1,N)):
+        for k in tqdm(range(1,N),desc = 'Solving Navier-Stokes equations.'):
             ## Step 1 ADVECTION
             ux_s  = ux[:,:,k-1] -dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
             uy_s = uy[:,:,k-1] - dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(uy[:,:,k-1],dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
