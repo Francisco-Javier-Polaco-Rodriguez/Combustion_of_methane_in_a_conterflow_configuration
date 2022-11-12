@@ -7,11 +7,11 @@ from scipy.io import savemat
 from fluid_solver import *
 
 u_slot = 1
-u_coflow = 0.5
-N_x,N_y = 32,32
-N_time = 500
+u_coflow = 0.2
+N_x,N_y = 64,64
+N_time = 1000
 Lx,Ly = 2e-3,2e-3
-dt = 2e-9
+dt = 10e-9
 viscosity,density = 15e-6,1.1614
 
 [X,Y] = np.meshgrid(np.linspace(0,Lx,N_x),np.linspace(0,Lx,N_y))
@@ -19,11 +19,12 @@ up_bc_uy = np.ones(N_x)
 down_bc_uy = np.ones(N_x)
 
 ## Particula BC of the problem
+fact = 2
 for k in range(N_x):
-    if k < N_x/4:
+    if k < N_x/fact/2:
         up_bc_uy[k] = u_slot
         down_bc_uy[k] = -u_slot
-    elif N_x/4 <= k and k < N_x/2:
+    elif N_x/fact/2 <= k and k < N_x/fact:
         up_bc_uy[k] = u_coflow
         down_bc_uy[k] = -u_coflow
     else:
@@ -51,24 +52,24 @@ main_fluid = fluid_initial_condition(u_0x = u0x,
                 viscosity = viscosity,
                 density = density)
 
-plt.show()
 bc_ux = boundary_condition(up_bc_ux,down_bc_ux)
 bc_uy = boundary_condition(up_bc_uy,down_bc_uy)
 
 solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 
 # SOLVE EQUATIONS AND SAVE RESULTS
-solver.solve_navier_stokes(N_time,precision_jac = 0.05,repeat_jac = 20000)
+solver.solve_navier_stokes(N_time,precision_jac = 0.05,repeat_jac = 100000,warnig_jacobi=False)
 mat = {'ux':solver.ux,'uy':solver.uy,'p':solver.p,'t':solver.dt*np.arange(0,N_time),'X':X,'Y':Y}
-savemat('Simulation_for_N_space_%i_and_T=%1.3f_ns.mat'%(N_x,N_time*solver.dt),mat)
+savemat('Simulation_for_%ix%i_grid_and_T=%1.3f_ns.mat'%(N_x,N_y,N_time*solver.dt*1e6),mat)
 
 # Change this to the path on your oun laptop
 path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Methods/Project_fluid/Combustion_of_methane_in_a_conterflow_configuration/figures_for_videos'
 X,Y = 1e3*X,1e3*Y
 
-N_t_skip_for_vid = 2
+Nframes = 100
 images = []
 frame = 0
+N_t_skip_for_vid = np.int32(N_time/Nframes)
 
 for k in tqdm(np.arange(1,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
     fig, ax = plt.subplots(1,1)
