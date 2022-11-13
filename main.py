@@ -8,10 +8,10 @@ from fluid_solver import *
 
 u_slot = 1
 u_coflow = 0.2
-N_x,N_y = 64,64
-N_time = 1000
+N_x,N_y = 124,124
+N_time = 10000
 Lx,Ly = 2e-3,2e-3
-dt = 10e-9
+dt = 1e-9
 viscosity,density = 15e-6,1.1614
 
 [X,Y] = np.meshgrid(np.linspace(0,Lx,N_x),np.linspace(0,Lx,N_y))
@@ -31,18 +31,18 @@ for k in range(N_x):
         up_bc_uy[k] = 0
         down_bc_uy[k] = 0
 
-up_bc_ux = np.zeros(N_x)
-down_bc_ux = np.zeros(N_x)
+up_bc_ux = np.zeros(N_x,dtype=np.float32)
+down_bc_ux = np.zeros(N_x,dtype=np.float32)
 
 ## Initial conditions and object creation
 
-u0x = np.zeros([N_y,N_x])
-u0y = np.zeros([N_y,N_x])
+u0x = np.zeros([N_y,N_x],dtype=np.float32)
+u0y = np.zeros([N_y,N_x],dtype=np.float32)
 u0y[0,:]=up_bc_uy
 u0y[-1,:]=down_bc_uy
 u0x[0,:]=up_bc_ux
 u0x[-1,:]=down_bc_ux
-p0 = np.zeros([N_y,N_x])
+p0 = np.zeros([N_y,N_x],dtype=np.float32)
 
 
 
@@ -58,7 +58,7 @@ bc_uy = boundary_condition(up_bc_uy,down_bc_uy)
 solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 
 # SOLVE EQUATIONS AND SAVE RESULTS
-solver.solve_navier_stokes(N_time,precision_jac = 0.05,repeat_jac = 100000,warnig_jacobi=False)
+solver.solve_navier_stokes(N_time,precision_jac = 0.05,repeat_jac = 100000,warnig_jacobi = False)
 mat = {'ux':solver.ux,'uy':solver.uy,'p':solver.p,'t':solver.dt*np.arange(0,N_time),'X':X,'Y':Y}
 savemat('Simulation_for_%ix%i_grid_and_T=%1.3f_ns.mat'%(N_x,N_y,N_time*solver.dt*1e6),mat)
 

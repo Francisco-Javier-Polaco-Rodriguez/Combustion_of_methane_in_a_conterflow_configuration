@@ -3,36 +3,43 @@ from colorama import Fore, Back, Style
 from tqdm import tqdm
 
 ## DERIVATIVES FOR NAVIER STOKES EQUATIONS. BC ADAPTED TO VELOCITY
-def DDx(M,dx):
+from numba import jit
+
+
+@jit(nopython = True)
+def DDx(M:np.array,dx):
     I,J = M.shape
-    ddxM = np.zeros([I,J])
+    ddxM = np.zeros((I,J))
     for j in range(1,J-1):
         ddxM[:,j] = (M[:,j+1]-2*M[:,j]+M[:,j-1])/dx**2
     return ddxM
 
-def DDy(M,dy):
+@jit(nopython = True)
+def DDy(M:np.array,dy):
     I,J = M.shape
-    ddyM = np.zeros([I,J])
+    ddyM = np.zeros((I,J))
     for i in range(1,I-1):
         ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
     return ddyM
 
-def Dx(M,dx,Bound_left = 0):
+@jit(nopython=True)
+def Dx(M:np.array,dx,Bound_left = 0):
     I,J = M.shape
-    dxM = np.zeros([I,J])
+    dxM = np.zeros((I,J))
     for j in range(J):
         if j == J-1:
             #ddxM[:,j] = (Bound_right-2*M[:,j]+M[:,j-1])/dx**2 ## What would be without the bc
-            dxM[:,j] = (M[:,j]-M[:,j-1])/dx ## Free wall, derivative 0
+            dxM[:,j] = 0 ## Free wall, derivative 0
         elif j == 0:
             dxM[:,j] = (M[:,j+1]-Bound_left)/dx/2
         else:
             dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
-def Dy(M,dy,Bound_up,Bound_down):
+@jit(nopython=True)
+def Dy(M:np.array,dy,Bound_up,Bound_down):
     I,J = M.shape
-    dyM = np.zeros([I,J])
+    dyM = np.zeros((I,J))
     for i in range(I):
         if i == I-1:
             dyM[i,:] = (Bound_down-M[i-1,:])/dy/2
@@ -44,9 +51,10 @@ def Dy(M,dy,Bound_up,Bound_down):
 
 ## DERIVATIVES WITH GRAD(F)=0 AT BOTH SIDES
 
-def Dx_nobc(M,dx):
+@jit(nopython=True)
+def Dx_nobc(M:np.array,dx):
     I,J = M.shape
-    dxM = np.zeros([I,J])
+    dxM = np.zeros((I,J))
     for j in range(J):
         if j == J-1:
             dxM[:,j] = 0
@@ -56,9 +64,10 @@ def Dx_nobc(M,dx):
             dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
-def Dy_nobc(M,dy,Bound_down = 0):
+@jit(nopython=True)
+def Dy_nobc(M:np.array,dy,Bound_down = 0):
     I,J = M.shape
-    dyM = np.zeros([I,J])
+    dyM = np.zeros((I,J))
     for i in range(I):
         if i == I-1:
             dyM[i,:] = (Bound_down-M[i-1,:])/dy/2
@@ -70,9 +79,10 @@ def Dy_nobc(M,dy,Bound_down = 0):
 
 ## DERIVATIVES ADAPTED TO TRANSPORT OF SPECIES
 
-def DDx_transport(M,dx,Bound_right):
+@jit(nopython=True)
+def DDx_transport(M:np.array,dx,Bound_right):
     I,J = M.shape
-    ddxM = np.zeros([I,J])
+    ddxM = np.zeros((I,J))
     for j in range(J):
         if j == 0:
             ddxM[:,j] = 0
@@ -82,9 +92,10 @@ def DDx_transport(M,dx,Bound_right):
             ddxM[:,j] = (M[:,j+1]-2*M[:,j]+M[:,j-1])/dx**2
     return ddxM
 
-def DDy_transport(M,dy,Bound_up,Bound_down):
+@jit(nopython=True)
+def DDy_transport(M:np.array,dy,Bound_up,Bound_down):
     I,J = M.shape
-    ddyM = np.zeros([I,J])
+    ddyM = np.zeros((I,J))
     J_2 = np.int32(J/2)
     for i in range(I):
         if i == 0:
@@ -97,9 +108,10 @@ def DDy_transport(M,dy,Bound_up,Bound_down):
             ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
     return ddyM
 
-def Dx_transport(M,dx,Bound_right):
+@jit(nopython=True)
+def Dx_transport(M:np.array,dx,Bound_right):
     I,J = M.shape
-    dxM = np.zeros([I,J])
+    dxM = np.zeros((I,J))
     for j in range(J):
         if j == J-1:
             dxM[:,j] = 0
@@ -109,9 +121,10 @@ def Dx_transport(M,dx,Bound_right):
             dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
-def Dy_transport(M,dy,Bound_up,Bound_down):
+@jit(nopython=True)
+def Dy_transport(M:np.array,dy,Bound_up,Bound_down):
     I,J = M.shape
-    dyM = np.zeros([I,J])
+    dyM = np.zeros((I,J))
     J_2 = np.int32(J/2)
     for i in range(I):
         if i == I-1:
@@ -143,6 +156,21 @@ class boundary_condition():
         self.up = up
         self.down = down
         self.dim = len(up)
+
+
+## Precompiling pressure solver
+@jit(nopython = True)
+def jacobi(p_new:np.array,p:np.array,I:int,J:int,repeats:int,right_side:np.array,dx):
+    for k in range(repeats):
+        for i in range(1,I-1):
+            for j in range(1,J-1):
+                p_new[i,j] =0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*dx**2*right_side[i,j]
+        p = p_new.copy()
+        p_new[:,0]=p_new[:,1]
+        p_new[-1,:]=p_new[-2,:]
+        p_new[0,:]=p_new[1,:]
+        p_new[:,-1]=0
+    return p_new
 
 class pde_fluid_solver():
     def __init__(self,fluid_ic,bc_ux,bc_uy,N_time,dt,Lx,Ly):
@@ -181,23 +209,25 @@ class pde_fluid_solver():
         count = 0
         old_rel_error = np.nan
         while not_good and count < max_reps:
-            for k in range(repeats):
-                    #simpler version commented, but boundary condition in p=p0
-                for i in range(1,I-1):
-                    for j in range(1,J-1):
-                        p_new[i,j] =0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-                del p
-                p = p_new.copy()
-                count += 1
-                p_new[:,0]=p_new[:,1]
-                p_new[-1,:]=p_new[-2,:]
-                p_new[0,:]=p_new[1,:]
-                p_new[:,-1]=0
+            jacobi(p_new,p,I,J,repeats,right_side,self.dx)
+            #for k in range(repeats):
+            #    for i in range(1,I-1):
+            #        for j in range(1,J-1):
+            #            p_new[i,j] =0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
+            #    del p
+            #    p = p_new.copy()
+            #    count += 1
+            #    p_new[:,0]=p_new[:,1]
+            #    p_new[-1,:]=p_new[-2,:]
+            #    p_new[0,:]=p_new[1,:]
+            #    p_new[:,-1]=0
+            count += repeats
             er_mat = np.abs(DDx(p_new,self.dx)+DDy(p_new,self.dy)-right_side)
             rel_error = np.mean(np.mean(er_mat[1:-1,1:-1],axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side[1:-1,1:-1]),axis = 0),axis = 0)
-            if rel_error > precision and np.abs(rel_error-old_rel_error) < precision*0.1 and warning_pres: ## Max accuracy of solver
+            if rel_error > precision and np.abs(rel_error-old_rel_error) < precision*0.1: ## Max accuracy of solver
                 not_good = False
-                print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  a %ix%i grid.'%(rel_error,precision,self.dim[0],self.dim[1]) + Style.RESET_ALL)
+                if warning_pres:
+                    print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  a %ix%i grid.'%(rel_error,precision,self.dim[0],self.dim[1]) + Style.RESET_ALL)
             if rel_error <=precision: ## Control of the error
                 not_good = False
             elif rel_error < 2*precision:
@@ -208,17 +238,16 @@ class pde_fluid_solver():
                 repeats = int(repeats*2)
             old_rel_error = rel_error
         p = p_new
-        if repeats >= max_reps and warning_pres:
+        if warning_pres:
             print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  %i repetitions of the method.'%(rel_error,precision,max_reps) + Style.RESET_ALL)
         return p
-
     def solve_navier_stokes(self,N = np.NaN,precision_jac = 0.1,repeat_jac = 100,warnig_jacobi = True): # Advance N times Navier Stokes equations.
         if N == np.NaN:
             N = self.N_time
         ## First step. Initialize simulation
-        ux = np.zeros([self.dim[0],self.dim[1],N])
-        uy = np.zeros([self.dim[0],self.dim[1],N])
-        p = np.zeros([self.dim[0],self.dim[1],N])
+        ux = np.zeros([self.dim[0],self.dim[1],N],dtype=np.float32)
+        uy = np.zeros([self.dim[0],self.dim[1],N],dtype=np.float32)
+        p = np.zeros([self.dim[0],self.dim[1],N],dtype=np.float32)
         dt = self.dt
         dx,dy = self.dx,self.dy
         visc = self.initial_condition.viscosity
@@ -237,9 +266,9 @@ class pde_fluid_solver():
         bc_x_down = self.bc_ux.down
         bc_y_down = self.bc_uy.down
         ## Second step simulation !!!
-        for k in tqdm(range(1,N),desc = 'Solving Navier-Stokes equations.'):
+        for k in tqdm(range(1,N),desc = 'Solving Navier-Stokes equations'):
             ## Step 1 ADVECTION
-            ux_s  = ux[:,:,k-1] -dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
+            ux_s = ux[:,:,k-1] - dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
             uy_s = uy[:,:,k-1] - dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(uy[:,:,k-1],dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
 
             ## ARTIFICIAL DIFFUSION, order 2 in advection
@@ -294,7 +323,7 @@ class diffuser():
             raise ValueError('Invalid fourier number. You need bigger grid or more little time step.  The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
         if Cy > 1 or Cx > 1:
             TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
-        print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
+        print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
 
     def function_scheme(self,phi,ux,uy,D,dx,dy,dt):
         dxphi  = Dx_transport(phi,dx,Bound_right = 0)

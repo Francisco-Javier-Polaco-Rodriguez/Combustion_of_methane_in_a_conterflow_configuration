@@ -6,9 +6,9 @@ from scipy.io import loadmat
 
 from fluid_solver import *
 
-mat = loadmat('Simulation_for_64x64_grid_and_T=10.000_ns.mat')
+mat = loadmat('Simulation_for_124x124_grid_and_T=10.000_ns.mat')
 X,Y = mat['X'],mat['Y']
-ux,uy = mat['ux'][:,:,300],mat['uy'][:,:,300]
+ux,uy = mat['ux'][:,:,-1],mat['uy'][:,:,-1]
 p = mat['p']
 t = mat['t'][0]
 N_x = X.shape[1]
