@@ -22,7 +22,8 @@ def DDy(M:np.array,dy):
         ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
     return ddyM
 
-@jit(nopython=True)
+## Note for the future, it is better to make the derivative in 2 steps, first the calculation and finally the boundary conditions, like you did in the second order derivatives
+@jit(nopython = True)
 def Dx(M:np.array,dx,Bound_left = 0):
     I,J = M.shape
     dxM = np.zeros((I,J))
@@ -36,7 +37,7 @@ def Dx(M:np.array,dx,Bound_left = 0):
             dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
-@jit(nopython=True)
+@jit(nopython = True)
 def Dy(M:np.array,dy,Bound_up,Bound_down):
     I,J = M.shape
     dyM = np.zeros((I,J))
@@ -51,7 +52,7 @@ def Dy(M:np.array,dy,Bound_up,Bound_down):
 
 ## DERIVATIVES WITH GRAD(F)=0 AT BOTH SIDES
 
-@jit(nopython=True)
+@jit(nopython = True)
 def Dx_nobc(M:np.array,dx):
     I,J = M.shape
     dxM = np.zeros((I,J))
@@ -64,7 +65,7 @@ def Dx_nobc(M:np.array,dx):
             dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
-@jit(nopython=True)
+@jit(nopython = True)
 def Dy_nobc(M:np.array,dy,Bound_down = 0):
     I,J = M.shape
     dyM = np.zeros((I,J))
@@ -79,7 +80,7 @@ def Dy_nobc(M:np.array,dy,Bound_down = 0):
 
 ## DERIVATIVES ADAPTED TO TRANSPORT OF SPECIES
 
-@jit(nopython=True)
+@jit(nopython = True)
 def DDx_transport(M:np.array,dx,Bound_right):
     I,J = M.shape
     ddxM = np.zeros((I,J))
@@ -92,7 +93,7 @@ def DDx_transport(M:np.array,dx,Bound_right):
             ddxM[:,j] = (M[:,j+1]-2*M[:,j]+M[:,j-1])/dx**2
     return ddxM
 
-@jit(nopython=True)
+@jit(nopython = True)
 def DDy_transport(M:np.array,dy,Bound_up,Bound_down):
     I,J = M.shape
     ddyM = np.zeros((I,J))
@@ -108,7 +109,7 @@ def DDy_transport(M:np.array,dy,Bound_up,Bound_down):
             ddyM[i,:] = (M[i+1,:]-2*M[i,:]+M[i-1,:])/dy**2
     return ddyM
 
-@jit(nopython=True)
+@jit(nopython = True)
 def Dx_transport(M:np.array,dx,Bound_right):
     I,J = M.shape
     dxM = np.zeros((I,J))
@@ -121,7 +122,7 @@ def Dx_transport(M:np.array,dx,Bound_right):
             dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
-@jit(nopython=True)
+@jit(nopython = True)
 def Dy_transport(M:np.array,dy,Bound_up,Bound_down):
     I,J = M.shape
     dyM = np.zeros((I,J))
@@ -198,7 +199,7 @@ class pde_fluid_solver():
         if Fx > 0.25 or Fy > 0.25:
             raise ValueError('Invalid fourier number. You need bigger grid or more little time step.  The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
         if Cy > 1 or Cx > 1:
-            TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
+            raise TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
         print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
     def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = 10000,warning_pres = True):
         p = left_side.copy()
@@ -293,7 +294,8 @@ class pde_fluid_solver():
             uy[-1,:,k] = bc_y_down
 
             ux[:,0,k]  = np.zeros(self.dim[0])
-            # ux[:,-1,k] = nothing needed, free wall
+            ux[:,-1,k] = ux[:,-2,k] # The velocity from left is advected, otherwise we have always ux()
+            uy[:,-1,k] = uy[:,-2,k]
             # uy[:,0,k]  = nothing needed, slipping wall
             # uy[:,-1,k] = nothing needed, free wall
         self.ux = np.concatenate((self.ux,ux),axis = 2)
@@ -345,4 +347,5 @@ class diffuser():
             k3 = self.function_scheme(rho[:,:,k-1]-dt*k1/3+dt*k2,self.ux,self.uy,D,dx,dy,dt)
             k4 = self.function_scheme(rho[:,:,k-1]+dt*k1-dt*k2+dt*k3,self.ux,self.uy,D,dx,dy,dt)
             rho[:,:,k] = rho[:,:,k-1] + dt*k1/8 + 3*dt*k2/8 + 3*dt*k3/8 + dt*k4/8
+            rho[:,-1,k] = rho[:,-2,k]
         self.rho = np.concatenate((self.rho,rho[:,:,1:-1]),axis = 2)

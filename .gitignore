@@ -1,0 +1,16 @@
+
+*.avi
+*.mat
+*.mp4
+figures_for_videos/Video_32x32_grid_T=10.000ns.avi
+figures_for_videos/Video_64x64_grid_T=10.000ns.avi
+figures_for_videos/Video_Nitrogen_diffusion_64x64_grid_T=10.000ms.avi
+figures_for_videos/Video_Nitrogen_diffusion_64x64_grid_T=100.000ms.avi
+Simulation_for_32x32_grid_and_T=10.000_ns.mat
+Simulation_for_64x64_grid_and_T=10.000_ns.mat
+figures_for_videos/Video_32x32_grid_T=10.000ns.avi
+figures_for_videos/Video_64x64_grid_T=10.000ns.avi
+figures_for_videos/Video_Nitrogen_diffusion_64x64_grid_T=10.000ms.avi
+figures_for_videos/Video_Nitrogen_diffusion_64x64_grid_T=100.000ms.avi
+Simulation_for_32x32_grid_and_T=10.000_ns.mat
+Simulation_for_64x64_grid_and_T=10.000_ns.mat

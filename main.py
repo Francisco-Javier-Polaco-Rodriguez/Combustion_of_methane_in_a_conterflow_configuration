@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
+import imageio
 import os
 from scipy.io import savemat
 
@@ -8,10 +8,11 @@ from fluid_solver import *
 
 u_slot = 1
 u_coflow = 0.2
-N_x,N_y = 124,124
-N_time = 10000
+N_x,N_y =  124,124
+N_time = 20000
+T = 25e-9
 Lx,Ly = 2e-3,2e-3
-dt = 1e-9
+dt = T/N_time
 viscosity,density = 15e-6,1.1614
 
 [X,Y] = np.meshgrid(np.linspace(0,Lx,N_x),np.linspace(0,Lx,N_y))
@@ -60,25 +61,28 @@ solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 # SOLVE EQUATIONS AND SAVE RESULTS
 solver.solve_navier_stokes(N_time,precision_jac = 0.05,repeat_jac = 100000,warnig_jacobi = False)
 mat = {'ux':solver.ux,'uy':solver.uy,'p':solver.p,'t':solver.dt*np.arange(0,N_time),'X':X,'Y':Y}
-savemat('Simulation_for_%ix%i_grid_and_T=%1.3f_ns.mat'%(N_x,N_y,N_time*solver.dt*1e6),mat)
+savemat('Simulation_for_%ix%i_grid_and_T=%1.3f_ns.mat'%(N_x,N_y,N_time*solver.dt*1e9),mat)
 
 # Change this to the path on your oun laptop
 path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Methods/Project_fluid/Combustion_of_methane_in_a_conterflow_configuration/figures_for_videos'
 X,Y = 1e3*X,1e3*Y
 
-Nframes = 100
+Nframes = 200
 images = []
 frame = 0
 N_t_skip_for_vid = np.int32(N_time/Nframes)
 
-for k in tqdm(np.arange(1,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
-    fig, ax = plt.subplots(1,1)
-    mod_u = np.sqrt(solver.ux[:,:,k]**2+solver.uy[:,:,k]**2)
-    color = ax.pcolormesh(X,Y,mod_u,cmap = 'jet',shading = 'auto')
-    plt.title('T = %1.2f ns'%(k*dt*1e6))
-    plt.quiver(X,Y,solver.ux[:,:,k]/mod_u,solver.uy[:,:,k]/mod_u)
-    cbar = plt.colorbar(color)
-    cbar.set_label('Modulus of velocity  (m/s)')
+for k in tqdm(np.arange(2,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ux = solver.ux[:,:,k]
+    uy = solver.uy[:,:,k]
+    plt.title('T = %1.1f ns'%(k*dt*1e9))
+    # Plot the streamlines with an appropriate colormap and arrow style
+    color = np.hypot(ux, uy)
+    strp = ax.streamplot(X, Y, ux, uy, color=color, linewidth=1, cmap=plt.cm.inferno,density = 2, arrowstyle='->', arrowsize = 1.5)
+    col = plt.colorbar(strp.lines, ax = ax)
+    col.set_label('Modulus of the velocity (m/s)')
     plt.xlabel('x   (mm)',size = 13)
     plt.ylabel('y   (mm)',size = 13)
     plt.axis([0,Lx*1e3-Lx/N_x*1e3,0,Ly*1e3])
@@ -86,23 +90,14 @@ for k in tqdm(np.arange(1,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
     images.append('frame%i.png'%(frame))
     frame += 1
     plt.close()
-    del fig
+    del fig,ux,uy
 
 image_folder = path
-video_name = 'Video_%ix%i_grid_T=%1.3fns.avi'%(N_x,N_y,N_time*solver.dt*1e6)
+video_name = path + '/' +'Video_%ix%i_grid_T=%1.3fns.avi'%(N_x,N_y,N_time*solver.dt*1e9)
 
-
-frame = cv2.imread(os.path.join(image_folder, images[0]))
-height, width, layers = frame.shape
-
-video = cv2.VideoWriter(path + '/' + video_name, 0, 10, (width,height))
-
-for image in images:
-    video.write(cv2.imread(os.path.join(image_folder, image)))
-
-cv2.destroyAllWindows()
-video.release()
-
-for image in images:
-    os.remove(path + '/' + image)
+with imageio.get_writer(video_name + '.mp4',fps = 20) as writer:
+    for i in range(len(images)):
+        image = imageio.imread(path + '/' + images[i])
+        writer.append_data(image)
+        os.remove(path + '/' + images[i])
 
