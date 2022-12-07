@@ -1,7 +1,7 @@
 import numpy as np
 from colorama import Fore, Back, Style
 from tqdm import tqdm
-
+from ode_chemistry_homogeneous import *
 ## DERIVATIVES FOR NAVIER STOKES EQUATIONS. BC ADAPTED TO VELOCITY
 from numba import jit
 
@@ -81,7 +81,7 @@ def Dy_nobc(M:np.array,dy,Bound_down = 0):
 ## DERIVATIVES ADAPTED TO TRANSPORT OF SPECIES
 
 @jit(nopython = True)
-def DDx_transport(M:np.array,dx,Bound_right):
+def DDx_transport(M:np.array,dx):
     I,J = M.shape
     ddxM = np.zeros((I,J))
     for j in range(J):
@@ -110,7 +110,7 @@ def DDy_transport(M:np.array,dy,Bound_up,Bound_down):
     return ddyM
 
 @jit(nopython = True)
-def Dx_transport(M:np.array,dx,Bound_right):
+def Dx_transport(M:np.array,dx):
     I,J = M.shape
     dxM = np.zeros((I,J))
     for j in range(J):
@@ -303,7 +303,7 @@ class pde_fluid_solver():
         self.p = np.concatenate((self.p,p),axis = 2)
 
 class diffuser():
-    def __init__(self,ux,uy,Lx,Ly,dt_steady_sim,bc,rho0,diff_coef):
+    def __init__(self,ux,uy,Lx,Ly,dt,bc,rho0,diff_coef):
         self.bc_up = bc.up
         self.bc_down = bc.down
         self.rho = rho0[:,:,np.newaxis]
@@ -315,7 +315,7 @@ class diffuser():
         self.diff_coef = diff_coef
         self.dy = Ly/self.dim[0]
         self.dx = Lx/self.dim[1]
-        self.dt = dt_steady_sim
+        self.dt = dt
         # Stability comprobation
         Fx = diff_coef*self.dt/self.dx**2
         Fy = diff_coef*self.dt/self.dy**2
@@ -328,11 +328,18 @@ class diffuser():
         print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
 
     def function_scheme(self,phi,ux,uy,D,dx,dy,dt):
-        dxphi  = Dx_transport(phi,dx,Bound_right = 0)
-        dx2phi = DDx_transport(phi,dx,Bound_right = 0)
+        dxphi  = Dx_transport(phi,dx)
+        dx2phi = DDx_transport(phi,dx)
         dyphi  = Dy_transport(phi,dy,Bound_up = self.bc_up,Bound_down = self.bc_down)
         dy2phi = DDy_transport(phi,dy,Bound_up = self.bc_up,Bound_down = self.bc_down)
         return D*(dx2phi+dy2phi) + ux**2*dt*dx2phi/2 + uy**2*dt*dy2phi/2 - ux*dxphi - uy*dyphi
+
+    def RK4(self,rho,dx,dy,dt,D):
+        k1 = self.function_scheme(rho,self.ux,self.uy,D,dx,dy,dt)
+        k2 = self.function_scheme(rho+dt*k1/3,self.ux,self.uy,D,dx,dy,dt)
+        k3 = self.function_scheme(rho-dt*k1/3+dt*k2,self.ux,self.uy,D,dx,dy,dt)
+        k4 = self.function_scheme(rho+dt*k1-dt*k2+dt*k3,self.ux,self.uy,D,dx,dy,dt)
+        return rho + dt*k1/8 + 3*dt*k2/8 + 3*dt*k3/8 + dt*k4/8
 
     def diffuse_RK4(self,N):
         rho = np.zeros([self.dim[1],self.dim[0],N])
@@ -342,10 +349,129 @@ class diffuser():
         dt = self.dt
         D = self.diff_coef
         for k in tqdm(range(1,N)):
-            k1 = self.function_scheme(rho[:,:,k-1],self.ux,self.uy,D,dx,dy,dt)
-            k2 = self.function_scheme(rho[:,:,k-1]+dt*k1/3,self.ux,self.uy,D,dx,dy,dt)
-            k3 = self.function_scheme(rho[:,:,k-1]-dt*k1/3+dt*k2,self.ux,self.uy,D,dx,dy,dt)
-            k4 = self.function_scheme(rho[:,:,k-1]+dt*k1-dt*k2+dt*k3,self.ux,self.uy,D,dx,dy,dt)
-            rho[:,:,k] = rho[:,:,k-1] + dt*k1/8 + 3*dt*k2/8 + 3*dt*k3/8 + dt*k4/8
+            rho[:,:,k] = self.RK4(rho[:,:,k-1],dx,dy,dt,D)
             rho[:,-1,k] = rho[:,-2,k]
         self.rho = np.concatenate((self.rho,rho[:,:,1:-1]),axis = 2)
+
+class difuser_4_species():
+    def __init__(self,ux,uy,Lx,Ly,dt,BC,IC_T,diff_coef):
+        self.N2_up = BC['N2_up']
+        self.N2_down = BC['N2_down']
+        self.CH4_up = BC['CH4_up']
+        self.CH4_down = BC['CH4_down']
+        self.O2_up = BC['O2_up']
+        self.O2_down = BC['O2_down']
+        self.H2O_up = BC['H2O_up']
+        self.H2O_down = BC['H2O_down']
+        self.CO2_up = BC['CO2_up']
+        self.CO2_down = BC['CO2_down']
+
+        self.ux = ux
+        self.uy = uy
+        self.Lx = Lx
+        self.Ly = Ly
+        self.dim = ux.shape
+        self.diff_coef = diff_coef
+        self.dy = Ly/self.dim[0]
+        self.dx = Lx/self.dim[1]
+        self.dt = dt
+        # Stability comprobation
+        Fx = diff_coef*self.dt/self.dx**2
+        Fy = diff_coef*self.dt/self.dy**2
+        Cx = np.mean(np.mean(np.mean(np.abs(ux)+np.abs(uy))))*self.dt/self.dx
+        Cy = Cx*self.dx/self.dy
+        if Fx > 0.25 or Fy > 0.25:
+            raise ValueError('Invalid fourier number. You need bigger grid or more little time step.  The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
+        if Cy > 1 or Cx > 1:
+            TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
+        print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy] = [%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
+
+        N2  = np.zeros(self.dim)
+        N2[0,:]  = self.N2_up
+        N2[-1,:] = self.N2_down
+        CH4 = np.zeros(self.dim)
+        CH4[0,:]  = self.CH4_up
+        CH4[-1,:] = self.CH4_down
+        O2  = np.zeros(self.dim)
+        O2[0,:]  = self.O2_up
+        O2[-1,:] = self.O2_down
+        H2O = np.zeros(self.dim)
+        H2O[0,:]  = self.H2O_up
+        H2O[-1,:] = self.H2O_down
+        CO2 = np.zeros(self.dim)
+        CO2[0,:]  = self.CO2_up
+        CO2[-1,:] = self.CO2_down
+
+        self.N2  = N2[:,:,np.newaxis]
+        self.CH4 = CH4[:,:,np.newaxis]
+        self.O2  = O2[:,:,np.newaxis]
+        self.H2O = H2O[:,:,np.newaxis]
+        self.CO2 = CO2[:,:,np.newaxis]
+        self.T   = IC_T[:,:,np.newaxis]
+
+    def function_scheme(self,phi,ux,uy,D,dx,dy,dt,bc_up,bc_down):
+        dxphi  = Dx_transport(phi,dx)
+        dx2phi = DDx_transport(phi,dx)
+        dyphi  = Dy_transport(phi,dy,Bound_up = bc_up,Bound_down = bc_down)
+        dy2phi = DDy_transport(phi,dy,Bound_up = bc_up,Bound_down = bc_down)
+        return D*(dx2phi+dy2phi) + ux**2*dt*dx2phi/2 + uy**2*dt*dy2phi/2 - ux*dxphi - uy*dyphi
+
+    def RK4(self,rho,dx,dy,dt,D,bc_up,bc_down):
+        k1 = self.function_scheme(rho,self.ux,self.uy,D,dx,dy,dt,bc_up,bc_down)
+        k2 = self.function_scheme(rho+dt*k1/3,self.ux,self.uy,D,dx,dy,dt,bc_up,bc_down)
+        k3 = self.function_scheme(rho-dt*k1/3+dt*k2,self.ux,self.uy,D,dx,dy,dt,bc_up,bc_down)
+        k4 = self.function_scheme(rho+dt*k1-dt*k2+dt*k3,self.ux,self.uy,D,dx,dy,dt,bc_up,bc_down)
+        return rho + dt*k1/8 + 3*dt*k2/8 + 3*dt*k3/8 + dt*k4/8
+
+    def function_scheme_T(self,phi,ux,uy,D,dx,dy,dt):
+        dxphi  = Dx(phi,dx,Bound_left = phi[:,0])
+        dx2phi = DDx(phi,dx)
+        dyphi  = Dy(phi,dy,Bound_down = phi[-1,:],Bound_up = phi[0,:])
+        dy2phi = DDy(phi,dy)
+        return D*(dx2phi+dy2phi) + ux**2*dt*dx2phi/2 + uy**2*dt*dy2phi/2 - ux*dxphi - uy*dyphi
+
+    def RK4_T(self,rho,dx,dy,dt,D):
+        k1 = self.function_scheme_T(rho,self.ux,self.uy,D,dx,dy,dt)
+        k2 = self.function_scheme_T(rho+dt*k1/3,self.ux,self.uy,D,dx,dy,dt)
+        k3 = self.function_scheme_T(rho-dt*k1/3+dt*k2,self.ux,self.uy,D,dx,dy,dt)
+        k4 = self.function_scheme_T(rho+dt*k1-dt*k2+dt*k3,self.ux,self.uy,D,dx,dy,dt)
+        return rho + dt*k1/8 + 3*dt*k2/8 + 3*dt*k3/8 + dt*k4/8
+
+    def react(self,N,N_chem = 150): 
+        N2 = np.zeros((self.dim[0],self.dim[1],N))
+        N2[:,:,0]  =  self.N2[:,:,-1]
+        CH4 = np.zeros((self.dim[0],self.dim[1],N))
+        CH4[:,:,0] = self.CH4[:,:,-1]
+        O2 = np.zeros((self.dim[0],self.dim[1],N))
+        O2[:,:,0]  =  self.O2[:,:,-1]
+        H2O = np.zeros((self.dim[0],self.dim[1],N))
+        H2O[:,:,0] = self.H2O[:,:,-1]
+        CO2 = np.zeros((self.dim[0],self.dim[1],N))
+        CO2[:,:,0] = self.CO2[:,:,-1]
+        T   = np.zeros((self.dim[0],self.dim[1],N))
+        T[:,:,0]  =  self.T[:,:,-1]
+
+        dx = self.dx
+        dy = self.dy
+        dt = self.dt
+        D = self.diff_coef
+        for k in tqdm(range(1,N)):
+            N2[:,:,k]   = self.RK4(N2[:,:,k-1],dx,dy,dt,D,self.N2_up,self.N2_down)
+            N2[:,-1,k]  = N2[:,-2,k]
+            CH4[:,:,k]  = self.RK4(CH4[:,:,k-1],dx,dy,dt,D,self.CH4_up,self.CH4_down)
+            CH4[:,-1,k] = CH4[:,-2,k]
+            O2[:,:,k]  =  self.RK4(O2[:,:,k-1],dx,dy,dt,D,self.O2_up,self.O2_down)
+            O2[:,-1,k]  = O2[:,-2,k]
+            H2O[:,:,k]  = self.RK4(H2O[:,:,k-1],dx,dy,dt,D,self.H2O_up,self.H2O_down)
+            H2O[:,-1,k] = H2O[:,-2,k]
+            CO2[:,:,k]  = self.RK4(CO2[:,:,k-1],dx,dy,dt,D,self.CO2_up,self.CO2_down)
+            CO2[:,-1,k] = CO2[:,-2,k]
+            T[:,:,k]  = self.RK4_T(T[:,:,k-1],dx,dy,dt,D)
+            T[:,-1,k] = T[:,-2,k]
+            N2[:,:,k],CH4[:,:,k],O2[:,:,k],H2O[:,:,k],CO2[:,:,k],T[:,:,k] = odesolver(N2[:,:,k],CH4[:,:,k],O2[:,:,k],H2O[:,:,k],CO2[:,:,k],T[:,:,k],dt/N_chem,N_chem)
+        self.N2  = np.concatenate((self.N2,N2[:,:,1:-1]),axis = 2)
+        self.CH4 = np.concatenate((self.CH4,CH4[:,:,1:-1]),axis = 2)
+        self.O2  = np.concatenate((self.O2,O2[:,:,1:-1]),axis = 2)
+        self.H2O = np.concatenate((self.H2O,H2O[:,:,1:-1]),axis = 2)
+        self.CO2 = np.concatenate((self.CO2,CO2[:,:,1:-1]),axis = 2)
+        self.T   = np.concatenate((self.T,T[:,:,1:-1]),axis = 2)

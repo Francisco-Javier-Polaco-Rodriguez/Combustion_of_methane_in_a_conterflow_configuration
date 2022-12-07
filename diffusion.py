@@ -5,8 +5,8 @@ import os
 from scipy.io import loadmat
 
 from fluid_solver import *
-
-mat = loadmat('Simulation_for_124x124_grid_and_T=25.000_ns.mat')
+path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Methods/Project_fluid/Results'
+mat = loadmat(path + '/' + 'Simulation_for_64x64_grid_and_T=50.000_ns.mat')
 X,Y = mat['X'],mat['Y']
 ux,uy = mat['ux'][:,:,-1],mat['uy'][:,:,-1]
 p = mat['p']
@@ -48,10 +48,9 @@ N2 = diffuser(ux,uy,Lx,Ly,dt,bc_N,rho0,D)
 
 
 
-N2.diffuse_RK4(N_time)
+N2.diffuse_RK4_2(N_time)
 
 # Change this to the path on your oun laptop
-path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Methods/Project_fluid/Combustion_of_methane_in_a_conterflow_configuration/figures_for_videos'
 X,Y = 1e3*X,1e3*Y
 
 Nframes = 100
@@ -74,11 +73,10 @@ for k in tqdm(np.arange(1,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
     del fig
 
 image_folder = path
-video_name = 'Video_Nitrogen_diffusion_%ix%i_grid_T=%1.3fms'%(N_x,N_y,N_time*N2.dt*1e3)
-
+video_name = 'RK4_adapted_chemistry_Video_Nitrogen_diffusion_%ix%i_grid_T=%1.3fms'%(N_x,N_y,N_time*N2.dt*1e3)
 
 image_folder = path
-video_name = path + '/' +'Video_diffusion_Res_stokes_25ns_%ix%i_grid_T=%1.3fms'%(N_x,N_y,N_time*N2.dt*1e3)
+video_name = path + '/' + video_name
 
 with imageio.get_writer(video_name + '.mp4',fps = 20) as writer:
     for i in range(len(images)):
