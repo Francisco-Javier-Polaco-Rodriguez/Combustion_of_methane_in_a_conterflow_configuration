@@ -8,9 +8,9 @@ from fluid_solver import *
 
 u_slot = 1
 u_coflow = 0.2
-N_x,N_y =  64,64
-N_time = 10000
-T = 50e-9
+N_x,N_y =  32,32
+N_time = 200000
+T = 20e-6
 Lx,Ly = 2e-3,2e-3
 dt = T/N_time
 viscosity,density = 15e-6,1.1614
@@ -59,12 +59,13 @@ bc_uy = boundary_condition(up_bc_uy,down_bc_uy)
 solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 
 # SOLVE EQUATIONS AND SAVE RESULTS
-solver.solve_navier_stokes(N_time,precision_jac = 0.05,repeat_jac = 100000,warnig_jacobi = False)
+solver.solve_navier_stokes(N_time,precision_jac = 0.05,max_repeat_jac = 1e9,warnig_jacobi = True)
 mat = {'ux':solver.ux,'uy':solver.uy,'p':solver.p,'t':solver.dt*np.arange(0,N_time),'X':X,'Y':Y}
-savemat('Simulation_for_%ix%i_grid_and_T=%1.3f_ns.mat'%(N_x,N_y,N_time*solver.dt*1e9),mat)
+path_mat = 'D:/Results of projects/Combustion/Navier Stokes Results'
+savemat(path_mat + '/' + 'Simulation_for_%ix%i_grid_and_T=%1.3f_ms.mat'%(N_x,N_y,N_time*solver.dt*1e3),mat)
 
 # Change this to the path on your oun laptop
-path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Methods/Project_fluid/Results'
+path = 'D:/Results of projects/Combustion/Navier Stokes Results/Videos'
 X,Y = 1e3*X,1e3*Y
 
 Nframes = 200
@@ -93,7 +94,7 @@ for k in tqdm(np.arange(2,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
     del fig,ux,uy
 
 image_folder = path
-video_name = path + '/' +'Video_%ix%i_grid_T=%1.3fns'%(N_x,N_y,N_time*solver.dt*1e9)
+video_name = path + '/' +'Video_%ix%i_grid_T=%1.3fms'%(N_x,N_y,N_time*solver.dt*1e3)
 
 with imageio.get_writer(video_name + '.mp4',fps = 20) as writer:
     for i in range(len(images)):

@@ -73,7 +73,7 @@ def odesolver_scalar(N2_0,CH4_0,O2_0,H2O_0,CO2_0,T_0,dt,N):
 
 
 @jit(nopython = True)
-def odesolver(N2_0,CH4_0,O2_0,H2O_0,CO2_0,T_0,dt,N):
+def odesolver_chem(N2_0,CH4_0,O2_0,H2O_0,CO2_0,T_0,dt,N):
     nu = [0,-1,-2,2,1]   ## Stoichiometric coefficients. Order N2,CH4,O2,H2O,CO2
     h  = [0,0,-74.9e3,-241.818e3,-393.52e3] ## Entalpy reactions
     W  = [28.01340e-3,16.0425e-3,31.99880e-3,18.01528e-3,44.0095e-3]  ## Molar masses (kg/mol)

@@ -208,28 +208,17 @@ class pde_fluid_solver():
         [I,J] = self.dim
         repeats = 10
         count = 0
-        old_rel_error = np.nan
+        old_rel_error = np.inf
         while not_good and count < max_reps:
             jacobi(p_new,p,I,J,repeats,right_side,self.dx)
-            #for k in range(repeats):
-            #    for i in range(1,I-1):
-            #        for j in range(1,J-1):
-            #            p_new[i,j] =0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*self.dx**2*right_side[i,j]
-            #    del p
-            #    p = p_new.copy()
-            #    count += 1
-            #    p_new[:,0]=p_new[:,1]
-            #    p_new[-1,:]=p_new[-2,:]
-            #    p_new[0,:]=p_new[1,:]
-            #    p_new[:,-1]=0
             count += repeats
             er_mat = np.abs(DDx(p_new,self.dx)+DDy(p_new,self.dy)-right_side)
             rel_error = np.mean(np.mean(er_mat[1:-1,1:-1],axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side[1:-1,1:-1]),axis = 0),axis = 0)
-            if rel_error > precision and np.abs(rel_error-old_rel_error) < precision*0.1: ## Max accuracy of solver
+            if rel_error > precision and np.abs(rel_error-old_rel_error) < precision * 0.05: ## Max accuracy of solver
                 not_good = False
                 if warning_pres:
                     print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  a %ix%i grid.'%(rel_error,precision,self.dim[0],self.dim[1]) + Style.RESET_ALL)
-            if rel_error <=precision: ## Control of the error
+            if rel_error <= precision: ## Control of the error
                 not_good = False
             elif rel_error < 2*precision:
                 repeats = int(repeats/1.5)
@@ -239,10 +228,10 @@ class pde_fluid_solver():
                 repeats = int(repeats*2)
             old_rel_error = rel_error
         p = p_new
-        if warning_pres:
+        if warning_pres and count >= max_reps:
             print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  %i repetitions of the method.'%(rel_error,precision,max_reps) + Style.RESET_ALL)
         return p
-    def solve_navier_stokes(self,N = np.NaN,precision_jac = 0.1,repeat_jac = 100,warnig_jacobi = True): # Advance N times Navier Stokes equations.
+    def solve_navier_stokes(self,N = np.NaN,precision_jac = 0.1,max_repeat_jac = 100,warnig_jacobi = True): # Advance N times Navier Stokes equations.
         if N == np.NaN:
             N = self.N_time
         ## First step. Initialize simulation
@@ -269,23 +258,23 @@ class pde_fluid_solver():
         ## Second step simulation !!!
         for k in tqdm(range(1,N),desc = 'Solving Navier-Stokes equations'):
             ## Step 1 ADVECTION
-            ux_s = ux[:,:,k-1] - dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
-            uy_s = uy[:,:,k-1] - dt*(ux[:,:,k-1]*Dx(ux[:,:,k-1],dx)+uy[:,:,k-1]*Dy(uy[:,:,k-1],dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
+            ux_s = ux[:,:,k-1] - dt * (ux[:,:,k-1] * Dx(ux[:,:,k-1],dx)+uy[:,:,k-1] * Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
+            uy_s = uy[:,:,k-1] - dt * (ux[:,:,k-1] * Dx(ux[:,:,k-1],dx) + uy[:,:,k-1] * Dy(uy[:,:,k-1],dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
 
             ## ARTIFICIAL DIFFUSION, order 2 in advection
-            ux_s = ux_s + 0.5*dt**2*(ux[:,:,k-1]**2*DDx(ux[:,:,k-1],dx)+uy[:,:,k-1]**2*DDy(ux[:,:,k-1],dy))
-            ux_s = ux_s + 0.5*dt**2*(ux[:,:,k-1]**2*DDx(uy[:,:,k-1],dx)+uy[:,:,k-1]**2*DDy(uy[:,:,k-1],dy))
+            ux_s = ux_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(ux[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(ux[:,:,k-1],dy))
+            ux_s = ux_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(uy[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(uy[:,:,k-1],dy))
 
             ## Step 2 DIFFUSION
-            ux_ss = ux_s + dt*visc*(DDx(ux_s,dx)+DDy(ux_s,dy))
-            uy_ss = uy_s + dt*visc*(DDx(ux_s,dx)+DDy(uy_s,dy))
+            ux_ss = ux_s + dt * visc * (DDx(ux_s,dx)+DDy(ux_s,dy))
+            uy_ss = uy_s + dt * visc * (DDx(ux_s,dx)+DDy(uy_s,dy))
 
             ## Step 3 IMPOSE COMPRESSIBILITY 
-            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up))/dt,max_reps=repeat_jac,precision=precision_jac,warning_pres = warnig_jacobi)
+            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up))/dt,max_reps = max_repeat_jac,precision = precision_jac,warning_pres = warnig_jacobi)
 
             ##Step 4, ADVANCE TIME
-            ux[:,:,k] = ux_ss-dt*Dx_nobc(p[:,:,k],dx)/dens
-            uy[:,:,k] = uy_ss-dt*Dy_nobc(p[:,:,k],dy)/dens
+            ux[:,:,k] = ux_ss - dt * Dx_nobc(p[:,:,k],dx) / dens
+            uy[:,:,k] = uy_ss - dt * Dy_nobc(p[:,:,k],dy) / dens
 
             # Extra step. No boundary condition in derivatives. We impose here the boundary conditions
             ux[0,:,k]  = bc_x_up
@@ -437,7 +426,7 @@ class difuser_4_species():
         k4 = self.function_scheme_T(rho+dt*k1-dt*k2+dt*k3,self.ux,self.uy,D,dx,dy,dt)
         return rho + dt*k1/8 + 3*dt*k2/8 + 3*dt*k3/8 + dt*k4/8
 
-    def react(self,N,N_chem = 150): 
+    def react(self,N,N_chem = 150,time_spark = 4e-3): 
         N2 = np.zeros((self.dim[0],self.dim[1],N))
         N2[:,:,0]  =  self.N2[:,:,-1]
         CH4 = np.zeros((self.dim[0],self.dim[1],N))
@@ -455,7 +444,9 @@ class difuser_4_species():
         dy = self.dy
         dt = self.dt
         D = self.diff_coef
+        spark_not_done = True
         for k in tqdm(range(1,N)):
+            ## ADVECTION
             N2[:,:,k]   = self.RK4(N2[:,:,k-1],dx,dy,dt,D,self.N2_up,self.N2_down)
             N2[:,-1,k]  = N2[:,-2,k]
             CH4[:,:,k]  = self.RK4(CH4[:,:,k-1],dx,dy,dt,D,self.CH4_up,self.CH4_down)
@@ -468,7 +459,13 @@ class difuser_4_species():
             CO2[:,-1,k] = CO2[:,-2,k]
             T[:,:,k]  = self.RK4_T(T[:,:,k-1],dx,dy,dt,D)
             T[:,-1,k] = T[:,-2,k]
-            N2[:,:,k],CH4[:,:,k],O2[:,:,k],H2O[:,:,k],CO2[:,:,k],T[:,:,k] = odesolver(N2[:,:,k],CH4[:,:,k],O2[:,:,k],H2O[:,:,k],CO2[:,:,k],T[:,:,k],dt/N_chem,N_chem)
+            ## CHEMISTRY
+            N2[:,:,k],CH4[:,:,k],O2[:,:,k],H2O[:,:,k],CO2[:,:,k],T[:,:,k] = odesolver_chem(N2[:,:,k],CH4[:,:,k],O2[:,:,k],H2O[:,:,k],CO2[:,:,k],T[:,:,k],dt/N_chem,N_chem)
+            ## SPARK SIMULATION IN 0.5mm CENTER
+            if k*dt >= time_spark and spark_not_done:
+                spark_not_done = False
+                N_x,N_y = self.dim[1],self.dim[0]
+                T[np.int32(N_x/4):np.int32(3*N_x/4),:,k] = T[np.int32(N_x/4):np.int32(3*N_x/4),:,k] + 700
         self.N2  = np.concatenate((self.N2,N2[:,:,1:-1]),axis = 2)
         self.CH4 = np.concatenate((self.CH4,CH4[:,:,1:-1]),axis = 2)
         self.O2  = np.concatenate((self.O2,O2[:,:,1:-1]),axis = 2)

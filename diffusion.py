@@ -2,11 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import imageio
 import os
-from scipy.io import loadmat
+from scipy.io import loadmat,savemat
 
 from fluid_solver import *
-path = '/Users/Pacopol/Desktop/Plasma Physics and Fusion Master/Numerical Methods/Project_fluid/Results'
-mat = loadmat(path + '/' + 'Simulation_for_64x64_grid_and_T=50.000_ns.mat')
+path = 'D:/Results of projects/Combustion/Navier Stokes Results'
+mat = loadmat(path + '/' + 'Simulation_for_124x124_grid_and_T=50.000_ns.mat')
 X,Y = mat['X'],mat['Y']
 ux,uy = mat['ux'][:,:,-1],mat['uy'][:,:,-1]
 p = mat['p']
@@ -29,10 +29,10 @@ fact = 2
 for k in range(N_x):
     if k < N_x/fact/2:
         up_bc_N2[k] = N_slot
-        down_bc_N2[k] = N_slot
+        down_bc_N2[k] = N_slot*0
     elif N_x/fact/2 <= k and k < N_x/fact:
         up_bc_N2[k] = N_coflow
-        down_bc_N2[k] = N_coflow
+        down_bc_N2[k] = N_coflow*0
     else:
         up_bc_N2[k] = 0
         down_bc_N2[k] = 0
@@ -48,11 +48,20 @@ N2 = diffuser(ux,uy,Lx,Ly,dt,bc_N,rho0,D)
 
 
 
-N2.diffuse_RK4_2(N_time)
+N2.diffuse_RK4(N_time)
 
 # Change this to the path on your oun laptop
 X,Y = 1e3*X,1e3*Y
 
+path_mat ='D:/Results of projects/Combustion/Results diffusion'
+
+
+dic = {'N2':N2.rho,'time':np.arange(0,N_time)*dt,'x':X,'y':Y}
+savemat(path_mat + '/' + 'Up_only_Diffusion_of_N2_%ix%i_T=%1.2fms.mat'%(N_x,N_y,T*1e3),dic)
+
+#raise KeyError('No me sale de los cojones seguir calculando, comeme los wevo.')
+
+path = 'D:/Results of projects/Combustion/Results diffusion/Videos'
 Nframes = 100
 images = []
 frame = 0
@@ -73,7 +82,7 @@ for k in tqdm(np.arange(1,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
     del fig
 
 image_folder = path
-video_name = 'RK4_adapted_chemistry_Video_Nitrogen_diffusion_%ix%i_grid_T=%1.3fms'%(N_x,N_y,N_time*N2.dt*1e3)
+video_name = 'Up_only_RK4_adapted_chemistry_Video_Nitrogen_diffusion_%ix%i_grid_T=%1.3fms'%(N_x,N_y,N_time*N2.dt*1e3)
 
 image_folder = path
 video_name = path + '/' + video_name
