@@ -172,6 +172,21 @@ def jacobi(p_new:np.array,p:np.array,I:int,J:int,repeats:int,right_side:np.array
         p_new[0,:]=p_new[1,:]
         p_new[:,-1]=0
     return p_new
+## Precompiling pressure solver SOR method
+@jit(nopython = True)
+def SOR(p_new:np.array,p:np.array,I:int,J:int,repeats:int,right_side:np.array,dx):
+    N = p.shape[0]
+    omega = 2*(1-np.pi/N+np.pi**2/N**2)
+    for k in range(repeats):
+        for i in range(1,I-1):
+            for j in range(1,J-1):
+                p_new[i,j] =(1-omega)*p[i,j]+omega*(0.25*(p[i+1,j]+p_new[i-1,j]+p[i,j+1]+p_new[i,j-1])-0.25*dx**2*right_side[i,j])
+        p = p_new.copy()
+        p_new[:,0]=p_new[:,1]
+        p_new[-1,:]=p_new[-2,:]
+        p_new[0,:]=p_new[1,:]
+        p_new[:,-1]=0
+    return p_new
 
 class pde_fluid_solver():
     def __init__(self,fluid_ic,bc_ux,bc_uy,N_time,dt,Lx,Ly):
@@ -201,7 +216,7 @@ class pde_fluid_solver():
         if Cy > 1 or Cx > 1:
             raise TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
         print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
-    def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = 10000,warning_pres = True):
+    def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = 10000,warning_pres = True,solver = 'jacobi'):
         p = left_side.copy()
         p_new = p.copy()
         not_good = True
@@ -210,7 +225,10 @@ class pde_fluid_solver():
         count = 0
         old_rel_error = np.inf
         while not_good and count < max_reps:
-            jacobi(p_new,p,I,J,repeats,right_side,self.dx)
+            if solver == 'SOR':
+                SOR(p_new,p,I,J,repeats,right_side,self.dx)
+            else:
+                jacobi(p_new,p,I,J,repeats,right_side,self.dx)
             count += repeats
             er_mat = np.abs(DDx(p_new,self.dx)+DDy(p_new,self.dy)-right_side)
             rel_error = np.mean(np.mean(er_mat[1:-1,1:-1],axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side[1:-1,1:-1]),axis = 0),axis = 0)
@@ -231,7 +249,7 @@ class pde_fluid_solver():
         if warning_pres and count >= max_reps:
             print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  %i repetitions of the method.'%(rel_error,precision,max_reps) + Style.RESET_ALL)
         return p
-    def solve_navier_stokes(self,N = np.NaN,precision_jac = 0.1,max_repeat_jac = 100,warnig_jacobi = True): # Advance N times Navier Stokes equations.
+    def solve_navier_stokes(self,N = np.NaN,precision_jac = 0.1,max_repeat_jac = 100,warnig_jacobi = True,pres_solver = 'jacobi'): # Advance N times Navier Stokes equations.
         if N == np.NaN:
             N = self.N_time
         ## First step. Initialize simulation
@@ -270,7 +288,7 @@ class pde_fluid_solver():
             uy_ss = uy_s + dt * visc * (DDx(ux_s,dx)+DDy(uy_s,dy))
 
             ## Step 3 IMPOSE COMPRESSIBILITY 
-            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up))/dt,max_reps = max_repeat_jac,precision = precision_jac,warning_pres = warnig_jacobi)
+            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up))/dt,max_reps = max_repeat_jac,precision = precision_jac,warning_pres = warnig_jacobi,solver = pres_solver)
 
             ##Step 4, ADVANCE TIME
             ux[:,:,k] = ux_ss - dt * Dx_nobc(p[:,:,k],dx) / dens
