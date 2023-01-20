@@ -138,8 +138,29 @@ def Dy_transport(M:np.array,dy,Bound_up,Bound_down):
             dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy/2
     return dyM
 
+##Going farther in to second derivatives for diffusion
 
+@jit(nopython = True)
+def DDx_4th(M:np.array,dx):
+    I,J = M.shape
+    ddxM = np.zeros((I,J))
+    for j in range(1,J-1):
+        if j == J-2:
+            ddxM[:,j] = (-M[:,j-2]+16*M[:,j-1]-30*M[:,j]+16*M[:,j+1])/12/dx**2
+        else:
+            ddxM[:,j] = (-M[:,j-2]+16*M[:,j-1]-30*M[:,j]+16*M[:,j+1]-M[:,j+2])/12/dx**2
+    return ddxM
 
+@jit(nopython = True)
+def DDy_4th(M,dy):
+    I,J = M.shape
+    ddxM = np.zeros((I,J))
+    for i in range(1,I-1):
+        if i == I-2:
+            ddxM[i,:] = (-M[i-2,:]+16*M[i-1,:]-30*M[i,:]+16*M[i+1,:])/12/dy**2
+        else:
+            ddxM[i,:] = (-M[i-2,:]+16*M[i-1,:]-30*M[i,:]+16*M[i+1,:]-M[i+2,:])/12/dy**2
+    return ddxM
 class fluid_initial_condition():
     def __init__(self,u_0x,u_0y,p_0,viscosity,density):
         self.ux = u_0x
@@ -284,8 +305,8 @@ class pde_fluid_solver():
             ux_s = ux_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(uy[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(uy[:,:,k-1],dy))
 
             ## Step 2 DIFFUSION
-            ux_ss = ux_s + dt * visc * (DDx(ux_s,dx)+DDy(ux_s,dy))
-            uy_ss = uy_s + dt * visc * (DDx(ux_s,dx)+DDy(uy_s,dy))
+            ux_ss = ux_s + dt * visc * (DDx_4th(ux_s,dx)+DDy_4th(ux_s,dy))
+            uy_ss = uy_s + dt * visc * (DDx_4th(ux_s,dx)+DDy_4th(uy_s,dy))
 
             ## Step 3 IMPOSE COMPRESSIBILITY 
             p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up))/dt,max_reps = max_repeat_jac,precision = precision_jac,warning_pres = warnig_jacobi,solver = pres_solver)
