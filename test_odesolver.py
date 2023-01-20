@@ -6,12 +6,12 @@ from ode_chemistry_homogeneous import *
 
 
 N_chem = 1000
-T = 250e-6
+T = 500e-9
 dt = T/N_chem
 ## Order N2,CH4,O2,H2O,CO2
 
 T0 = 1000
-N2,CH4,O2,H2O,CO2,T = odesolver_scalar(0.4,0.2,0.4,0,0,T0,dt,N_chem)
+N2,CH4,O2,H2O,CO2,T = odesolver_scalar(0.7,0.1,0.2,0,0,T0,dt,N_chem)
 
 t = dt*np.arange(0,N_chem+1)*1e6
 
@@ -40,7 +40,7 @@ T = np.ones((32,32))*1e3
 
 print(N2.shape)
 
-N2,CH4,O2,H2O,CO2,T = odesolver(N2,CH4,O2,H2O,CO2,T,dt,N_chem)
+N2,CH4,O2,H2O,CO2,T = odesolver_scalar(N2,CH4,O2,H2O,CO2,T,dt,N_chem)
 
 print(N2[0,0])
 print(CH4[0,0])

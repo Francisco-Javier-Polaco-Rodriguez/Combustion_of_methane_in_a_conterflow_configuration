@@ -258,8 +258,8 @@ class pde_fluid_solver():
         ## Second step simulation !!!
         for k in tqdm(range(1,N),desc = 'Solving Navier-Stokes equations'):
             ## Step 1 ADVECTION
-            ux_s = ux[:,:,k-1] - dt * (ux[:,:,k-1] * Dx(ux[:,:,k-1],dx)+uy[:,:,k-1] * Dy(ux[:,:,k-1],dy,Bound_down=bc_x_down*bc_y_down,Bound_up=bc_x_up*bc_y_up))
-            uy_s = uy[:,:,k-1] - dt * (ux[:,:,k-1] * Dx(ux[:,:,k-1],dx) + uy[:,:,k-1] * Dy(uy[:,:,k-1],dy,Bound_down=bc_y_down**2,Bound_up=bc_y_up**2))
+            ux_s = ux[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(ux[:,:,k-1],dx)+uy[:,:,k-1] * Dy_nobc(ux[:,:,k-1],dy))
+            uy_s = uy[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(ux[:,:,k-1],dx) + uy[:,:,k-1] * Dy_nobc(uy[:,:,k-1],dy))
 
             ## ARTIFICIAL DIFFUSION, order 2 in advection
             ux_s = ux_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(ux[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(ux[:,:,k-1],dy))
@@ -285,8 +285,8 @@ class pde_fluid_solver():
             ux[:,0,k]  = np.zeros(self.dim[0])
             ux[:,-1,k] = ux[:,-2,k] # The velocity from left is advected, otherwise we have always ux()
             uy[:,-1,k] = uy[:,-2,k]
-            # uy[:,0,k]  = nothing needed, slipping wall
-            # uy[:,-1,k] = nothing needed, free wall
+            uy[:,0,k]  = uy[:,1,k] # Slipping wall
+            uy[:,-1,k] = uy[:,-2,k] # Free wall
         self.ux = np.concatenate((self.ux,ux),axis = 2)
         self.uy = np.concatenate((self.uy,uy),axis = 2)
         self.p = np.concatenate((self.p,p),axis = 2)

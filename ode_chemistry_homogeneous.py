@@ -8,7 +8,11 @@ rho = 1.1614
 cp = 1200
 @jit(nopython = True)
 def Q(CH4,O2,T):
-    return A*CH4*O2**2*np.exp(-Ta/T)
+    rho = 1.1614
+    W  = [28.01340e-3,16.0425e-3,31.99880e-3,18.01528e-3,44.0095e-3]  ## Molar masses (kg/mol)
+    CH4_ = CH4 * rho/W[1]
+    O2_ = O2 * rho/W[2]
+    return A*CH4_*O2_**2*np.exp(-Ta/T)
 
 @jit(nopython = True)
 def f(CH4,O2,T,W,nu):
@@ -27,7 +31,7 @@ def fT(T_old,CH4,O2,W,nu):
     nu = [0,-1,-2,2,1]   ## Stoichiometric coefficients. Order N2,CH4,O2,H2O,CO2
     h  = [0,0,-74.9e3,-241.818e3,-393.52e3] ## Entalpy reactions
     W  = [28.01340e-3,16.0425e-3,31.99880e-3,18.01528e-3,44.0095e-3]  ## Molar masses (kg/mol)
-    return -(h[0]*W[0]**-1*nu[0]+h[1]*W[1]**-1*nu[1]+h[2]*W[2]**-1*nu[2]+h[3]*W[3]**-1*nu[3]+h[4]*W[4]**-1*nu[4])*Q(CH4,O2,T_old)/rho/cp
+    return -(h[0]*nu[0]+h[1]*nu[1]+h[2]*nu[2]+h[3]*nu[3]+h[4]*nu[4])*Q(CH4,O2,T_old)/rho/cp
 
 @jit(nopython = True)
 def RK4_T(T_old,CH4,O2,W,nu,dt):
