@@ -8,7 +8,7 @@ from fluid_solver import *
 
 u_slot = 1
 u_coflow = 0.2
-N_x,N_y =  128,128
+N_x,N_y =  32,32
 N_time = 20000
 T = 50e-9
 Lx,Ly = 2e-3,2e-3

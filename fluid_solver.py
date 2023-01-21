@@ -56,26 +56,16 @@ def Dy(M:np.array,dy,Bound_up,Bound_down):
 def Dx_nobc(M:np.array,dx):
     I,J = M.shape
     dxM = np.zeros((I,J))
-    for j in range(J):
-        if j == J-1:
-            dxM[:,j] = 0
-        elif j == 0:
-            dxM[:,j] = 0
-        else:
-            dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
+    for j in range(1,J-1):
+        dxM[:,j] = (M[:,j+1]-M[:,j-1])/dx/2
     return dxM
 
 @jit(nopython = True)
 def Dy_nobc(M:np.array,dy,Bound_down = 0):
     I,J = M.shape
     dyM = np.zeros((I,J))
-    for i in range(I):
-        if i == I-1:
-            dyM[i,:] = (Bound_down-M[i-1,:])/dy/2
-        elif i == 0:
-            dyM[i,:] = 0
-        else:
-            dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy/2
+    for i in range(1,I-1):
+        dyM[i,:] = (M[i+1,:]-M[i-1,:])/dy/2
     return dyM
 
 ## DERIVATIVES ADAPTED TO TRANSPORT OF SPECIES
@@ -247,9 +237,9 @@ class pde_fluid_solver():
         old_rel_error = np.inf
         while not_good and count < max_reps:
             if solver == 'SOR':
-                SOR(p_new,p,I,J,repeats,right_side,self.dx)
+                p_new = SOR(p_new,p,I,J,repeats,right_side,self.dx)
             else:
-                Gauss_Seidel(p_new,p,I,J,repeats,right_side,self.dx)
+                p_new = Gauss_Seidel(p_new,p,I,J,repeats,right_side,self.dx)
             count += repeats
             er_mat = np.abs(DDx(p_new,self.dx)+DDy(p_new,self.dy)-right_side)
             rel_error = np.mean(np.mean(er_mat[1:-1,1:-1],axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side[1:-1,1:-1]),axis = 0),axis = 0)
