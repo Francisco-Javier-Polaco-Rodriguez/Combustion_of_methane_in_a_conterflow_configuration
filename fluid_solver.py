@@ -182,7 +182,7 @@ class boundary_condition():
 
 ## Precompiling pressure solver
 @jit(nopython = True)
-def jacobi(p_new:np.array,p:np.array,I:int,J:int,repeats:int,right_side:np.array,dx):
+def Gauss_Seidel(p_new:np.array,p:np.array,I:int,J:int,repeats:int,right_side:np.array,dx):
     for k in range(repeats):
         for i in range(1,I-1):
             for j in range(1,J-1):
@@ -218,8 +218,8 @@ class pde_fluid_solver():
         self.dim = fluid_ic.dimensions
         self.dt = dt
         self.X,self.Y = np.meshgrid(np.linspace(0,Lx,self.dim[1]),np.linspace(0,Ly,self.dim[0]))
-        self.dx = Lx/self.dim[1]
-        self.dy = Ly/self.dim[0]
+        self.dx = Lx/(self.dim[1]+1)
+        self.dy = Ly/(self.dim[0]+1)
         self.ux= fluid_ic.ux[:,:,np.newaxis]
         self.uy = fluid_ic.uy[:,:,np.newaxis]
         self.p = fluid_ic.pressure[:,:,np.newaxis]
@@ -237,7 +237,7 @@ class pde_fluid_solver():
         if Cy > 1 or Cx > 1:
             raise TypeError('Invalid C factor. You need dx/dt of the order of velocities. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy]] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy))
         print(Fore.BLUE + 'Solver pde class created successfully. The stabilities parameters are  [Fx,Fy] = [%1.3f,%1.3f] [Cx,Cy] =[%1.3f,%1.3f]'%(Fx,Fy,Cx,Cy) + Style.RESET_ALL)
-    def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = 10000,warning_pres = True,solver = 'jacobi'):
+    def presure_solver(self,left_side,right_side,precision = 0.05,max_reps = 10000,warning_pres = True,solver = 'Gauss_Seidel'):
         p = left_side.copy()
         p_new = p.copy()
         not_good = True
@@ -249,7 +249,7 @@ class pde_fluid_solver():
             if solver == 'SOR':
                 SOR(p_new,p,I,J,repeats,right_side,self.dx)
             else:
-                jacobi(p_new,p,I,J,repeats,right_side,self.dx)
+                Gauss_Seidel(p_new,p,I,J,repeats,right_side,self.dx)
             count += repeats
             er_mat = np.abs(DDx(p_new,self.dx)+DDy(p_new,self.dy)-right_side)
             rel_error = np.mean(np.mean(er_mat[1:-1,1:-1],axis = 0),axis = 0)/np.mean(np.mean(np.abs(right_side[1:-1,1:-1]),axis = 0),axis = 0)
@@ -286,8 +286,10 @@ class pde_fluid_solver():
         p[:,:,0]  = self.p[:,:,-1]
         # Preinicialize in RAM memory u star, u star stat
         ux_s = np.zeros(self.dim)
+        ux_sLW = np.zeros(self.dim)
         ux_ss = np.zeros(self.dim)
         uy_s = np.zeros(self.dim)
+        uy_sLW = np.zeros(self.dim)
         uy_ss = np.zeros(self.dim)
         ## Load boundary contition of the problem up and down (velocities in the slot and coflow)
         bc_x_up = self.bc_ux.up
@@ -297,19 +299,19 @@ class pde_fluid_solver():
         ## Second step simulation !!!
         for k in tqdm(range(1,N),desc = 'Solving Navier-Stokes equations'):
             ## Step 1 ADVECTION
-            ux_s = ux[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(ux[:,:,k-1],dx)+uy[:,:,k-1] * Dy_nobc(ux[:,:,k-1],dy))
-            uy_s = uy[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(ux[:,:,k-1],dx) + uy[:,:,k-1] * Dy_nobc(uy[:,:,k-1],dy))
+            ux_s = ux[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(ux[:,:,k-1],dx) + uy[:,:,k-1] * Dy_nobc(ux[:,:,k-1],dy))
+            uy_s = uy[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(uy[:,:,k-1],dx) + uy[:,:,k-1] * Dy_nobc(uy[:,:,k-1],dy))
 
             ## ARTIFICIAL DIFFUSION, order 2 in advection
-            ux_s = ux_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(ux[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(ux[:,:,k-1],dy))
-            ux_s = ux_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(uy[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(uy[:,:,k-1],dy))
+            ux_sLW = ux_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(ux[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(ux[:,:,k-1],dy))
+            uy_sLW = uy_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(uy[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(uy[:,:,k-1],dy))
 
             ## Step 2 DIFFUSION
-            ux_ss = ux_s + dt * visc * (DDx_4th(ux_s,dx)+DDy_4th(ux_s,dy))
-            uy_ss = uy_s + dt * visc * (DDx_4th(ux_s,dx)+DDy_4th(uy_s,dy))
+            ux_ss = ux_sLW + dt * visc * (DDx_4th(ux_sLW,dx)+DDy_4th(ux_sLW,dy))
+            uy_ss = uy_sLW + dt * visc * (DDx_4th(uy_sLW,dx)+DDy_4th(uy_sLW,dy))
 
             ## Step 3 IMPOSE COMPRESSIBILITY 
-            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx(ux_ss,dx)+Dy(uy_ss,dy,Bound_down=bc_y_down,Bound_up=bc_y_up))/dt,max_reps = max_repeat_jac,precision = precision_jac,warning_pres = warnig_jacobi,solver = pres_solver)
+            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy))/dt,max_reps = max_repeat_jac,precision = precision_jac,warning_pres = warnig_jacobi,solver = pres_solver)
 
             ##Step 4, ADVANCE TIME
             ux[:,:,k] = ux_ss - dt * Dx_nobc(p[:,:,k],dx) / dens
@@ -322,9 +324,9 @@ class pde_fluid_solver():
             uy[-1,:,k] = bc_y_down
 
             ux[:,0,k]  = np.zeros(self.dim[0])
-            ux[:,-1,k] = ux[:,-2,k] # The velocity from left is advected, otherwise we have always ux()
-            uy[:,-1,k] = uy[:,-2,k]
-            uy[:,0,k]  = uy[:,1,k] # Slipping wall
+            ux[:,-1,k] = ux[:,-2,k] # Free outlet, 0 derivative
+            uy[:,-1,k] = uy[:,-2,k] # Free outlet, 0 derivative
+            uy[:,0,k]  = uy[:,1,k]  # Slipping wall
             uy[:,-1,k] = uy[:,-2,k] # Free wall
         self.ux = np.concatenate((self.ux,ux),axis = 2)
         self.uy = np.concatenate((self.uy,uy),axis = 2)

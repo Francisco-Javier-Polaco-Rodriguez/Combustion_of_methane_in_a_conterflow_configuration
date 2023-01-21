@@ -8,9 +8,9 @@ from fluid_solver import *
 
 u_slot = 1
 u_coflow = 0.2
-N_x,N_y =  32,32
+N_x,N_y =  128,128
 N_time = 20000
-T = 20e-6
+T = 50e-9
 Lx,Ly = 2e-3,2e-3
 dt = T/N_time
 viscosity,density = 15e-6,1.1614
@@ -59,10 +59,10 @@ bc_uy = boundary_condition(up_bc_uy,down_bc_uy)
 solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 
 # SOLVE EQUATIONS AND SAVE RESULTS
-solver.solve_navier_stokes(N_time,precision_jac = 0.05,max_repeat_jac = 1e9,warnig_jacobi = True,pres_solver = 'SOR')
+solver.solve_navier_stokes(N_time,precision_jac = 0.05,max_repeat_jac = 1e4,warnig_jacobi = True,pres_solver = 'SOR')
 mat = {'ux':solver.ux,'uy':solver.uy,'p':solver.p,'t':solver.dt*np.arange(0,N_time),'X':X,'Y':Y}
 path_mat = 'D:/Results of projects/Combustion/Navier Stokes Results'
-savemat(path_mat + '/' + 'SEARCHING_BUG_Simulation_for_%ix%i_grid_and_T=%1.3f_ms.mat'%(N_x,N_y,N_time*solver.dt*1e3),mat)
+savemat(path_mat + '/' + 'SEARCHING_BUG_Simulation_for_%ix%i_grid_and_T=%1.3f_ns.mat'%(N_x,N_y,N_time*solver.dt*1e9),mat)
 
 # Change this to the path on your oun laptop
 path = 'D:/Results of projects/Combustion/Navier Stokes Results/Videos'
