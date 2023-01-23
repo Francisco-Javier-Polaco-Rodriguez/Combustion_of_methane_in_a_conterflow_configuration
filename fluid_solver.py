@@ -151,6 +151,7 @@ def DDy_4th(M,dy):
         else:
             ddxM[i,:] = (-M[i-2,:]+16*M[i-1,:]-30*M[i,:]+16*M[i+1,:]-M[i+2,:])/12/dy**2
     return ddxM
+
 class fluid_initial_condition():
     def __init__(self,u_0x,u_0y,p_0,viscosity,density):
         self.ux = u_0x
@@ -260,13 +261,13 @@ class pde_fluid_solver():
         if warning_pres and count >= max_reps:
             print(Fore.RED + '\nWARNING: the relative error in pressure calculated by Jacobi method is %1.5f bigger than the precision = %1.5f. It is the better convergence that one can reach with  %i repetitions of the method.'%(rel_error,precision,max_reps) + Style.RESET_ALL)
         return p
-    def solve_navier_stokes(self,N = np.NaN,precision_jac = 0.1,max_repeat_jac = 100,warnig_jacobi = True,pres_solver = 'jacobi'): # Advance N times Navier Stokes equations.
+    def solve_navier_stokes(self,N = np.NaN,precision_jac = 0.1,max_repeat_pres = 100,warnig_jacobi = True,pres_solver = 'jacobi'): # Advance N times Navier Stokes equations.
         if N == np.NaN:
             N = self.N_time
         ## First step. Initialize simulation
-        ux = np.zeros([self.dim[0],self.dim[1],N],dtype=np.float32)
-        uy = np.zeros([self.dim[0],self.dim[1],N],dtype=np.float32)
-        p = np.zeros([self.dim[0],self.dim[1],N],dtype=np.float32)
+        ux = np.zeros([self.dim[0],self.dim[1],N+1],dtype=np.float32)
+        uy = np.zeros([self.dim[0],self.dim[1],N+1],dtype=np.float32)
+        p = np.zeros([self.dim[0],self.dim[1],N+1],dtype=np.float32)
         dt = self.dt
         dx,dy = self.dx,self.dy
         visc = self.initial_condition.viscosity
@@ -274,6 +275,7 @@ class pde_fluid_solver():
         ux[:,:,0] = self.ux[:,:,-1]
         uy[:,:,0] = self.uy[:,:,-1]
         p[:,:,0]  = self.p[:,:,-1]
+
         # Preinicialize in RAM memory u star, u star stat
         ux_s = np.zeros(self.dim)
         ux_sLW = np.zeros(self.dim)
@@ -287,7 +289,8 @@ class pde_fluid_solver():
         bc_x_down = self.bc_ux.down
         bc_y_down = self.bc_uy.down
         ## Second step simulation !!!
-        for k in tqdm(range(1,N),desc = 'Solving Navier-Stokes equations'):
+        for k in tqdm(range(1,N+1),desc = 'Solving Navier-Stokes equations'):
+
             ## Step 1 ADVECTION
             ux_s = ux[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(ux[:,:,k-1],dx) + uy[:,:,k-1] * Dy_nobc(ux[:,:,k-1],dy))
             uy_s = uy[:,:,k-1] - dt * (ux[:,:,k-1] * Dx_nobc(uy[:,:,k-1],dx) + uy[:,:,k-1] * Dy_nobc(uy[:,:,k-1],dy))
@@ -297,11 +300,15 @@ class pde_fluid_solver():
             uy_sLW = uy_s + 0.5 * dt**2 * (ux[:,:,k-1]**2 * DDx(uy[:,:,k-1],dx) + uy[:,:,k-1]**2 * DDy(uy[:,:,k-1],dy))
 
             ## Step 2 DIFFUSION
-            ux_ss = ux_sLW + dt * visc * (DDx_4th(ux_sLW,dx)+DDy_4th(ux_sLW,dy))
-            uy_ss = uy_sLW + dt * visc * (DDx_4th(uy_sLW,dx)+DDy_4th(uy_sLW,dy))
+            ux_ss = ux_sLW + dt * visc * (DDx(ux_sLW,dx) + DDy(ux_sLW,dy))
+            uy_ss = uy_sLW + dt * visc * (DDx(uy_sLW,dx) + DDy(uy_sLW,dy))
 
             ## Step 3 IMPOSE COMPRESSIBILITY 
-            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy))/dt,max_reps = max_repeat_jac,precision = precision_jac,warning_pres = warnig_jacobi,solver = pres_solver)
+            p[:,:,k]  = self.presure_solver(p[:,:,k-1],dens*(Dx_nobc(ux_ss,dx)+Dy_nobc(uy_ss,dy))/dt,
+            max_reps = max_repeat_pres,
+            precision = precision_jac,
+            warning_pres = warnig_jacobi,
+            solver = pres_solver)
 
             ##Step 4, ADVANCE TIME
             ux[:,:,k] = ux_ss - dt * Dx_nobc(p[:,:,k],dx) / dens
@@ -318,6 +325,15 @@ class pde_fluid_solver():
             uy[:,-1,k] = uy[:,-2,k] # Free outlet, 0 derivative
             uy[:,0,k]  = uy[:,1,k]  # Slipping wall
             uy[:,-1,k] = uy[:,-2,k] # Free wall
+
+            # Set to 0 all variables
+            ux_s = np.zeros(self.dim)
+            ux_sLW = np.zeros(self.dim)
+            ux_ss = np.zeros(self.dim)
+            uy_s = np.zeros(self.dim)
+            uy_sLW = np.zeros(self.dim)
+            uy_ss = np.zeros(self.dim)
+
         self.ux = np.concatenate((self.ux,ux),axis = 2)
         self.uy = np.concatenate((self.uy,uy),axis = 2)
         self.p = np.concatenate((self.p,p),axis = 2)

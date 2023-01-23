@@ -8,9 +8,9 @@ from fluid_solver import *
 
 u_slot = 1
 u_coflow = 0.2
-N_x,N_y =  32,32
-N_time = 20000
-T = 50e-9
+N_x,N_y =  64,64
+N_time = 5000
+T = 10e-3
 Lx,Ly = 2e-3,2e-3
 dt = T/N_time
 viscosity,density = 15e-6,1.1614
@@ -59,10 +59,15 @@ bc_uy = boundary_condition(up_bc_uy,down_bc_uy)
 solver = pde_fluid_solver(main_fluid,bc_ux,bc_uy,N_time,dt,Lx,Ly)
 
 # SOLVE EQUATIONS AND SAVE RESULTS
-solver.solve_navier_stokes(N_time,precision_jac = 0.05,max_repeat_jac = 1e4,warnig_jacobi = True,pres_solver = 'SOR')
+solver.solve_navier_stokes(N_time,precision_jac = 0.05,
+max_repeat_pres = 50,
+warnig_jacobi = False,
+pres_solver = 'SOR')
+
+
 mat = {'ux':solver.ux,'uy':solver.uy,'p':solver.p,'t':solver.dt*np.arange(0,N_time),'X':X,'Y':Y}
 path_mat = 'D:/Results of projects/Combustion/Navier Stokes Results'
-savemat(path_mat + '/' + 'SEARCHING_BUG_Simulation_for_%ix%i_grid_and_T=%1.3f_ns.mat'%(N_x,N_y,N_time*solver.dt*1e9),mat)
+savemat(path_mat + '/' + 'SEARCHING_BUG_Simulation_for_%ix%i_grid_and_T=%1.3f_ms.mat'%(N_x,N_y,N_time*solver.dt*1e3),mat)
 
 # Change this to the path on your oun laptop
 path = 'D:/Results of projects/Combustion/Navier Stokes Results/Videos'
@@ -72,13 +77,13 @@ Nframes = 200
 images = []
 frame = 0
 N_t_skip_for_vid = np.int32(N_time/Nframes)
-raise KeyError('Chupamela')
+
 for k in tqdm(np.arange(2,N_time,N_t_skip_for_vid),desc = 'Creating frame'):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ux = solver.ux[:,:,k]
     uy = solver.uy[:,:,k]
-    plt.title('T = %1.1f ns'%(k*dt*1e9))
+    plt.title('T = %1.1f ms'%(k*dt*1e3))
     # Plot the streamlines with an appropriate colormap and arrow style
     color = np.hypot(ux, uy)
     strp = ax.streamplot(X, Y, ux, uy, color=color, linewidth=1, cmap=plt.cm.inferno,density = 2, arrowstyle='->', arrowsize = 1.5)
